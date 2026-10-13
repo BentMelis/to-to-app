@@ -1,0 +1,16 @@
+{
+  "name": "Todo tree",
+  "short_name": "Todo tree",
+  "description": "A todo list shaped like a tree: projects branch into sub-projects, todos and notes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#EDF0E8",
+  "theme_color": "#1C241F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

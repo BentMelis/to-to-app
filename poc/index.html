@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#EDF0E8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111713" media="(prefers-color-scheme: dark)">
+<meta name="description" content="A todo list shaped like a tree: projects branch into sub-projects, todos and notes.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Todo tree">
+<title>Todo tree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#EDF0E8; --dot:#C9D0C3; --surface:#FFFFFF; --ink:#1C241F; --muted:#56635A; --edge:#C6CDC1;
+  --bark:#9A8C7B; --leaf:#2D7342; --leaf-ink:#FFFFFF; --leaf-soft:#DDEBDF; --focus:#1C241F; --note:#F5F0DC; --note-edge:#B9A979;
+  --font-ui:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-head:"Bricolage Grotesque", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#111713; --dot:#26302A; --surface:#1A221D; --ink:#E3E9E2; --muted:#9BA79E; --edge:#334037;
+    --bark:#7A6F62; --leaf:#6ABF84; --leaf-ink:#0D1910; --leaf-soft:#1D3325; --focus:#E3E9E2; --note:#27261B; --note-edge:#6E6645;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111713; --dot:#26302A; --surface:#1A221D; --ink:#E3E9E2; --muted:#9BA79E; --edge:#334037;
+  --bark:#7A6F62; --leaf:#6ABF84; --leaf-ink:#0D1910; --leaf-soft:#1D3325; --focus:#E3E9E2; --note:#27261B; --note-edge:#6E6645;
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-ui);overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2.5px solid var(--leaf);outline-offset:2px}
+
+/* Canvas */
+#vp{position:fixed;inset:0;overflow:hidden;touch-action:none;cursor:grab;outline:none;
+  background-image:radial-gradient(circle, var(--dot) 1.1px, transparent 1.4px);background-size:24px 24px}
+#vp.panning{cursor:grabbing}
+#canvas{position:absolute;left:0;top:0;transform-origin:0 0}
+#vp.glide #canvas{transition:transform .28s ease}
+#vp.glide{transition:background-position .28s ease, background-size .28s ease}
+#links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
+#links path{fill:none;stroke:var(--bark);stroke-linecap:round}
+#links path.done{stroke:var(--leaf)}
+#links path.to-note{stroke-dasharray:2 6;stroke:var(--note-edge)}
+
+/* Nodes: shape tells you the type. Projects are boxes, todos are pills, notes are paper slips. */
+.node{position:absolute;left:0;top:0;display:flex;align-items:center;gap:10px;min-height:40px;max-width:260px;width:max-content;
+  padding:8px 16px 8px 10px;background:var(--surface);border:1.5px solid var(--edge);border-radius:999px;cursor:pointer;user-select:none;-webkit-user-select:none}
+.node.project{border:2px solid var(--ink);border-radius:8px;padding:10px 18px 10px 12px}
+.node.project.nested{border-width:1.5px}
+.node.todo.has-kids{border-color:var(--bark)}
+.node.note{background:var(--note);border:1.5px dashed var(--note-edge);border-radius:3px;padding:8px 14px;max-width:240px}
+.node.root{background:transparent;border:none;padding:4px 18px 4px 2px}
+.node.selected{outline:2.5px solid var(--focus);outline-offset:3px}
+.node.complete.project,.node.complete.todo{border-color:var(--leaf)}
+.body{min-width:0}
+.title{display:block;font-size:15px;line-height:1.3;overflow-wrap:anywhere;min-width:2ch}
+.todo.has-kids .title{font-weight:700}
+.project .title{font-family:var(--font-head);font-weight:700;font-size:17px;letter-spacing:-.005em}
+.project.nested .title{font-size:15.5px}
+.note .title{font-size:14px;line-height:1.4;color:var(--ink)}
+.root .title{font-family:var(--font-head);font-weight:700;font-size:28px;letter-spacing:-.015em;line-height:1.1}
+.title:empty::before{content:attr(data-ph);color:var(--muted);font-weight:400}
+.todo.complete:not(.has-kids) .title{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--leaf);text-decoration-thickness:2px}
+.title[contenteditable="true"]{outline:none;cursor:text;user-select:text;-webkit-user-select:text;min-width:9ch;box-shadow:0 2px 0 var(--leaf)}
+.meta{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+.meta[hidden],.bar[hidden]{display:none}
+.bar{width:52px;height:4px;border-radius:2px;background:var(--edge);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--leaf)}
+.check{position:relative;flex:none;width:22px;height:22px;border-radius:50%;border:2px solid var(--bark);background:transparent;
+  display:grid;place-items:center;padding:0;cursor:pointer;color:var(--leaf-ink)}
+.check svg{width:14px;height:14px;opacity:0}
+.complete .check{background:var(--leaf);border-color:var(--leaf)}
+.complete .check svg{opacity:1}
+.check.mixed::after{content:"";position:absolute;width:10px;height:2.5px;border-radius:2px;background:var(--bark)}
+.check[hidden],.ring[hidden]{display:none}
+.ring{flex:none;width:22px;height:22px;border-radius:50%;
+  background:conic-gradient(var(--leaf) calc(var(--p, 0) * 1%), var(--edge) 0);
+  -webkit-mask:radial-gradient(circle, transparent 6px, #000 6.5px);mask:radial-gradient(circle, transparent 6px, #000 6.5px)}
+.handles{position:absolute;left:100%;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:6px}
+.fold{min-width:22px;height:22px;margin-left:-11px;padding:0 5px;border-radius:11px;border:1.5px solid var(--bark);background:var(--paper);
+  font-size:12px;font-weight:700;line-height:1;cursor:pointer;color:var(--ink);display:grid;place-items:center}
+.fold[hidden],.add[hidden]{display:none}
+.add{width:24px;height:24px;border-radius:50%;border:none;background:var(--ink);color:var(--paper);padding:0;display:grid;place-items:center;
+  cursor:pointer;opacity:0;margin-left:8px}
+.fold:not([hidden]) + .add{margin-left:0}
+.add svg{width:14px;height:14px}
+.node:hover .add,.node.selected .add,.add:focus-visible{opacity:1}
+@media (hover:none){.node:hover:not(.selected) .add{opacity:0}}
+
+/* Type picker */
+.picker{position:fixed;z-index:8;width:280px;background:var(--surface);border:1.5px solid var(--edge);border-radius:12px;padding:6px;
+  box-shadow:0 10px 30px -12px rgba(0,0,0,.35)}
+.picker[hidden]{display:none}
+.picker-head{font-size:13px;color:var(--muted);padding:6px 10px 8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pick{display:grid;grid-template-columns:30px 1fr auto;align-items:center;gap:10px;width:100%;text-align:left;border:none;background:transparent;
+  border-radius:8px;padding:9px 10px;cursor:pointer}
+.pick:hover,.pick:focus-visible{background:var(--leaf-soft);outline:none}
+.pick[hidden]{display:none}
+.pick:disabled{opacity:.4;cursor:default;background:transparent}
+.pick b{display:block;font-size:15px}
+.pick small{display:block;font-size:12.5px;color:var(--muted);line-height:1.3;margin-top:1px}
+.pick.current b::after{content:" (current)";font-weight:400;color:var(--muted)}
+.pi{width:26px;height:18px;justify-self:center}
+.pi-project{border:2px solid var(--ink);border-radius:4px}
+.pi-todo{width:18px;border:2px solid var(--bark);border-radius:50%}
+.pi-note{background:var(--note);border:1.5px dashed var(--note-edge);border-radius:2px}
+
+/* Chrome */
+.topbar{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 12px 10px;pointer-events:none}
+.topbar > *{pointer-events:auto}
+.group{display:flex;align-items:center;gap:2px;background:var(--surface);border:1.5px solid var(--edge);border-radius:10px;padding:3px}
+.tb{height:34px;min-width:34px;padding:0 10px;border:none;background:transparent;border-radius:7px;font-size:14px;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;white-space:nowrap}
+.tb svg{width:16px;height:16px;flex:none}
+.tb:hover{background:var(--leaf-soft)}
+.tb:disabled{opacity:.35;cursor:default;background:transparent}
+.tb.primary{background:var(--ink);color:var(--paper)}
+.tb.primary:hover{background:var(--ink);opacity:.88}
+.tb[aria-pressed="true"]{background:var(--leaf-soft);color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--leaf)}
+.tb.icon{padding:0}
+.tb.danger:hover{background:color-mix(in srgb, #C0392B 16%, transparent)}
+.tb[hidden]{display:none}
+.spacer{flex:1}
+.status{font-size:13px;color:var(--muted);padding:0 4px}
+.actions{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 14px);transform:translateX(-50%);z-index:5;max-width:calc(100% - 24px);overflow-x:auto}
+.actions[hidden]{display:none}
+kbd{font-family:var(--font-ui);font-size:11px;border:1px solid var(--edge);border-radius:4px;padding:1px 5px;color:var(--muted);line-height:1.4}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 74px);transform:translateX(-50%);z-index:6;
+  display:flex;align-items:center;gap:12px;background:var(--ink);color:var(--paper);border-radius:10px;padding:8px 8px 8px 14px;font-size:14px;max-width:calc(100% - 24px)}
+.toast[hidden]{display:none}
+.toast button{background:transparent;color:var(--paper);border:1.5px solid currentColor;border-radius:7px;padding:4px 10px;cursor:pointer;font-weight:700}
+.toast button[hidden]{display:none}
+.help{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:6;width:min(360px, calc(100% - 24px));max-height:calc(100% - 140px);overflow:auto;
+  background:var(--surface);border:1.5px solid var(--edge);border-radius:12px;padding:16px 18px;font-size:14px}
+.help[hidden]{display:none}
+.help h2{font-family:var(--font-head);font-size:18px;margin:0 0 10px}
+.help table{border-collapse:collapse;width:100%}
+.help td{padding:5px 0;vertical-align:top}
+.help td:first-child{white-space:nowrap;padding-right:14px}
+.help p{margin:12px 0 0;color:var(--muted);line-height:1.45}
+.empty{position:fixed;left:50%;top:55%;transform:translate(-50%,-50%);text-align:center;z-index:4;width:min(360px, calc(100% - 32px))}
+.empty[hidden]{display:none}
+.empty p{font-size:16px;line-height:1.45;margin:0 0 14px;color:var(--muted)}
+@media (max-width:640px){
+  .actions kbd{display:none}
+  .status,.topbar .spacer{display:none}
+  .root .title{font-size:24px}
+}
+@media (prefers-reduced-motion: reduce){
+  #vp.glide #canvas,#vp.glide{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div id="vp" tabindex="0" role="tree" aria-label="Todo tree">
+  <div id="canvas"><svg id="links" aria-hidden="true"></svg></div>
+</div>
+
+<header class="topbar">
+  <div class="group">
+    <button class="tb primary" id="btnAdd" title="Add something to the top level">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Add
+    </button>
+    <button class="tb" id="btnHide" aria-pressed="false" title="Hide finished items">Hide done</button>
+  </div>
+  <span class="status" id="status" aria-live="polite"></span>
+  <div class="spacer"></div>
+  <div class="group">
+    <button class="tb icon" id="btnUndo" aria-label="Undo" title="Undo (Ctrl/⌘+Z)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5.5 4 2.5 7l3 3M3 7h6.5a3.5 3.5 0 0 1 0 7H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="tb icon" id="btnRedo" aria-label="Redo" title="Redo (Ctrl/⌘+Shift+Z)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.5 4l3 3-3 3M13 7H6.5a3.5 3.5 0 0 0 0 7H8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+  </div>
+  <div class="group">
+    <button class="tb icon" id="btnOut" aria-label="Zoom out">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <button class="tb" id="btnFit" title="Fit the whole tree on screen (F)">Fit</button>
+    <button class="tb icon" id="btnIn" aria-label="Zoom in">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+  <div class="group">
+    <button class="tb primary" id="btnInstall" hidden title="Install as an app on this device">Install app</button>
+    <button class="tb icon" id="btnExport" aria-label="Download a backup" title="Download a backup (.json)">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="tb icon" id="btnImport" aria-label="Restore from a backup" title="Restore from a backup">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 10.5v-8M4.5 6 8 2.5 11.5 6M3 13.5h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <input type="file" id="fileImport" accept="application/json,.json" hidden>
+    <button class="tb icon" id="btnHelp" aria-label="How it works and shortcuts" aria-expanded="false" aria-controls="help">?</button>
+  </div>
+</header>
+
+<section class="help" id="help" hidden aria-label="How it works">
+  <h2>Three kinds of things</h2>
+  <table>
+    <tr><td><b>Project</b></td><td>A branch. It can hold anything, including other projects, as deep as you like. Its ring fills as the todos inside get done.</td></tr>
+    <tr><td><b>Todo</b></td><td>Something to tick off. Give it todos of its own to break it into steps.</td></tr>
+    <tr><td><b>Note</b></td><td>Info to keep next to your work. No checkbox, doesn’t count toward progress.</td></tr>
+  </table>
+  <h2 style="margin-top:16px">Shortcuts</h2>
+  <table>
+    <tr><td><kbd>Tab</kbd></td><td>Add inside the selected item (then <kbd>P</kbd> <kbd>T</kbd> or <kbd>N</kbd>)</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Add the next item of the same kind</td></tr>
+    <tr><td><kbd>Space</kbd></td><td>Mark a todo done or not done</td></tr>
+    <tr><td><kbd>K</kbd></td><td>Change what kind of item it is</td></tr>
+    <tr><td><kbd>F2</kbd> or <kbd>E</kbd></td><td>Rename</td></tr>
+    <tr><td><kbd>Delete</kbd></td><td>Delete the item and everything inside it</td></tr>
+    <tr><td>Arrow keys</td><td>Move between items</td></tr>
+    <tr><td><kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd></td><td>Move the item up or down</td></tr>
+    <tr><td><kbd>Alt</kbd> + <kbd>→</kbd> <kbd>←</kbd></td><td>Tuck under the item above, or move out a level</td></tr>
+    <tr><td><kbd>C</kbd></td><td>Collapse or expand</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Fit the tree on screen</td></tr>
+    <tr><td><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></td><td>Undo</td></tr>
+  </table>
+  <p>While typing a new item, Enter saves it and starts another of the same kind. Escape stops.</p>
+  <p>Drag empty space to move around. Pinch, or hold Ctrl/⌘ and scroll, to zoom.</p>
+  <p>Your tree is stored on this device and works offline. Use the download button to keep a backup or move it to another device, and the upload button to restore it.</p>
+</section>
+
+<div class="picker" id="picker" hidden role="menu" aria-labelledby="pickerHead">
+  <div class="picker-head" id="pickerHead"></div>
+  <button class="pick" role="menuitem" data-type="project"><span class="pi pi-project"></span><span><b>Project</b><small>A branch that can hold anything, even more projects</small></span><kbd>P</kbd></button>
+  <button class="pick" role="menuitem" data-type="todo"><span class="pi pi-todo"></span><span><b>Todo</b><small>Something to tick off</small></span><kbd>T</kbd></button>
+  <button class="pick" role="menuitem" data-type="note"><span class="pi pi-note"></span><span><b>Note</b><small>Info to keep here, no checkbox</small></span><kbd>N</kbd></button>
+</div>
+
+<nav class="group actions" id="actions" hidden aria-label="Selected item">
+  <button class="tb" data-act="child">Add inside <kbd>Tab</kbd></button>
+  <button class="tb" data-act="sibling">Add next <kbd>Enter</kbd></button>
+  <button class="tb" data-act="toggle"><span id="toggleLbl">Done</span> <kbd>Space</kbd></button>
+  <button class="tb" data-act="kind">Change kind <kbd>K</kbd></button>
+  <button class="tb" data-act="rename">Rename <kbd>F2</kbd></button>
+  <button class="tb danger" data-act="delete">Delete <kbd>Del</kbd></button>
+</nav>
+
+<div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastUndo">Undo</button></div>
+
+<div class="empty" id="empty" hidden>
+  <p id="emptyMsg"></p>
+  <button class="tb primary" id="emptyBtn"></button>
+</div>
+
+<script>
+(() => {
+  const KEY = 'todo-tree:v1';
+  const HGAP = 76, VGAP = 12, GROUPGAP = 8, MINK = 0.3, MAXK = 2;
+  const TYPES = {
+    root:    { label: 'Top level', allows: ['project', 'todo', 'note'] },
+    project: { label: 'Project', allows: ['project', 'todo', 'note'] },
+    todo:    { label: 'Todo', allows: ['todo', 'note'] },
+    note:    { label: 'Note', allows: [] }
+  };
+  const TYPE_KEYS = { p: 'project', t: 'todo', n: 'note' };
+
+  const vp = document.getElementById('vp');
+  const canvas = document.getElementById('canvas');
+  const links = document.getElementById('links');
+  const topbar = document.querySelector('.topbar');
+  const actions = document.getElementById('actions');
+  const statusEl = document.getElementById('status');
+  const helpEl = document.getElementById('help');
+  const btnHelp = document.getElementById('btnHelp');
+  const toast = document.getElementById('toast');
+  const emptyEl = document.getElementById('empty');
+  const picker = document.getElementById('picker');
+
+  const uid = () => Math.random().toString(36).slice(2, 10);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const mk = (type, title, children = [], done = false) => ({ id: uid(), type, title, done, collapsed: false, children });
+
+  function starter() {
+    return { v: 2, root: { id: 'root', type: 'root', title: 'My projects', done: false, collapsed: false, children: [
+      mk('project', 'Project one', [
+        mk('note', 'Goal: ship a first version by the end of the month'),
+        mk('project', 'Research', [mk('todo', 'Collect examples', [], true), mk('todo', 'List open questions')]),
+        mk('project', 'Build', [
+          mk('todo', 'First draft', [mk('todo', 'Outline'), mk('todo', 'Write it up')]),
+          mk('todo', 'Review with the team')
+        ])
+      ]),
+      mk('project', 'Project two', [mk('todo', 'Plan the kickoff')])
+    ] } };
+  }
+  // Older trees had no types: infer them so nothing is lost.
+  function normalize(n, d) {
+    n.id = String(n.id || uid()); n.title = String(n.title ?? '');
+    n.done = !!n.done; n.collapsed = !!n.collapsed;
+    n.children = Array.isArray(n.children) ? n.children : [];
+    if (!TYPES[n.type] || (n.type === 'root' && d > 0)) n.type = d === 0 ? 'root' : (n.children.length || d === 1) ? 'project' : 'todo';
+    n.children.forEach(c => normalize(c, d + 1));
+    if (n.type === 'todo' && n.children.some(c => c.type === 'project')) n.type = 'project';
+    if (n.type === 'note' && n.children.length) n.type = 'project';
+    return n;
+  }
+  function parseState(raw) {
+    try { const s = JSON.parse(raw); if (s && s.root) { s.root.id = 'root'; normalize(s.root, 0); s.v = 2; return s; } } catch (e) {}
+    return null;
+  }
+  function loadLocal() {
+    try { const raw = localStorage.getItem(KEY); if (raw) return parseState(raw); } catch (e) {}
+    return null;
+  }
+
+  let state = loadLocal() || starter();
+  let sel = null, editing = null, hideDone = false;
+  let view = { x: 24, y: 80, k: 1 };
+  let pos = {};
+  const els = new Map(), byId = new Map(), parentOf = new Map(), stats = new Map();
+  const undoStack = [], redoStack = [];
+
+  /* ---------- Model helpers ---------- */
+  function index() {
+    byId.clear(); parentOf.clear();
+    (function walk(n, p) { byId.set(n.id, n); parentOf.set(n.id, p); n.children.forEach(c => walk(c, n)); })(state.root, null);
+  }
+  // Progress counts todos only. A todo with sub-todos counts as its steps.
+  function computeStats() {
+    stats.clear();
+    (function s(n) {
+      const r = { total: 0, done: 0 };
+      n.children.forEach(c => { const x = s(c); r.total += x.total; r.done += x.done; });
+      if (n.type === 'todo' && r.total === 0) { r.total = 1; r.done = n.done ? 1 : 0; }
+      if (n.type === 'note') { r.total = 0; r.done = 0; }
+      stats.set(n.id, r); return r;
+    })(state.root);
+  }
+  const complete = n => { const s = stats.get(n.id); return !!s && s.total > 0 && s.done === s.total; };
+  const visKids = n => n.collapsed ? [] : n.children.filter(c => !(hideDone && complete(c)));
+  const countDesc = n => n.children.reduce((a, c) => a + 1 + countDesc(c), 0);
+  function setAll(n, v) { if (n.type === 'todo') n.done = v; n.children.forEach(c => setAll(c, v)); }
+  const allows = (n, type) => TYPES[n.type].allows.includes(type);
+  const nameOf = n => n.id === 'root' ? 'the top level' : `“${n.title || 'Untitled'}”`;
+
+  /* ---------- Rendering ---------- */
+  const ICON_CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const ICON_PLUS = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>';
+
+  function makeNode(id) {
+    const el = document.createElement('div');
+    el.className = 'node'; el.dataset.id = id; el.id = 'n-' + id; el.setAttribute('role', 'treeitem');
+    el.innerHTML = '<button class="check" tabindex="-1">' + ICON_CHECK + '</button><span class="ring" aria-hidden="true"></span>' +
+      '<div class="body"><span class="title"></span><div class="meta"><span class="count"></span><span class="bar"><i></i></span></div></div>' +
+      '<div class="handles"><button class="fold" tabindex="-1"></button><button class="add" tabindex="-1">' + ICON_PLUS + '</button></div>';
+    return el;
+  }
+
+  function fillNode(el, n, d) {
+    const s = stats.get(n.id), type = n.type, isRoot = type === 'root', hasKids = n.children.length > 0;
+    const comp = (type === 'todo' || type === 'project') && complete(n);
+    const name = n.title || 'Untitled';
+    const parent = parentOf.get(n.id);
+    el.className = 'node ' + type + (hasKids ? ' has-kids' : '') + (type === 'project' && parent && parent.type === 'project' ? ' nested' : '') +
+      (comp ? ' complete' : '') + (n.id === sel ? ' selected' : '');
+    el.setAttribute('aria-level', d + 1);
+    el.setAttribute('aria-selected', n.id === sel ? 'true' : 'false');
+    el.setAttribute('aria-label', (isRoot ? '' : TYPES[type].label + ': ') + name);
+    if (hasKids) el.setAttribute('aria-expanded', n.collapsed ? 'false' : 'true'); else el.removeAttribute('aria-expanded');
+
+    const check = el.querySelector('.check');
+    check.hidden = type !== 'todo';
+    if (type === 'todo') {
+      const mixed = hasKids && !comp && s.done > 0;
+      check.classList.toggle('mixed', mixed);
+      check.setAttribute('role', 'checkbox');
+      check.setAttribute('aria-checked', comp ? 'true' : mixed ? 'mixed' : 'false');
+      check.setAttribute('aria-label', (comp ? 'Mark not done: ' : 'Mark done: ') + name);
+    }
+    const ring = el.querySelector('.ring');
+    ring.hidden = type !== 'project';
+    if (type === 'project') ring.style.setProperty('--p', s.total ? Math.round(100 * s.done / s.total) : 0);
+
+    const t = el.querySelector('.title');
+    t.textContent = n.title; t.dataset.ph = 'Untitled';
+
+    const meta = el.querySelector('.meta'), bar = el.querySelector('.bar');
+    const showMeta = isRoot ? hasKids : type === 'project' || (type === 'todo' && s.total > 1);
+    meta.hidden = !showMeta;
+    if (showMeta) {
+      let txt;
+      if (s.total === 0) txt = hasKids ? 'No todos yet' : 'Empty';
+      else txt = isRoot ? `${s.done} of ${s.total} done` : `${s.done}/${s.total}`;
+      el.querySelector('.count').textContent = txt;
+      bar.hidden = s.total === 0;
+      bar.firstElementChild.style.width = (s.total ? (100 * s.done / s.total) : 0) + '%';
+    }
+
+    const fold = el.querySelector('.fold');
+    fold.hidden = !hasKids;
+    if (hasKids) {
+      fold.textContent = n.collapsed ? '+' + countDesc(n) : '−';
+      fold.setAttribute('aria-label', (n.collapsed ? 'Expand ' : 'Collapse ') + name);
+    }
+    const add = el.querySelector('.add');
+    add.hidden = !TYPES[type].allows.length;
+    add.setAttribute('aria-label', 'Add inside ' + name);
+  }
+
+  function render() {
+    index(); computeStats();
+    if (sel && !byId.has(sel)) sel = null;
+
+    const visible = [], depth = new Map();
+    (function walk(n, d) { visible.push(n); depth.set(n.id, d); visKids(n).forEach(c => walk(c, d + 1)); })(state.root, 0);
+    const visSet = new Set(visible.map(n => n.id));
+    if (sel && !visSet.has(sel)) {
+      let p = parentOf.get(sel); while (p && !visSet.has(p.id)) p = parentOf.get(p.id);
+      sel = p ? p.id : 'root';
+    }
+
+    for (const [id, el] of els) if (!visSet.has(id)) { el.remove(); els.delete(id); }
+    visible.forEach(n => {
+      let el = els.get(n.id);
+      if (!el) { el = makeNode(n.id); els.set(n.id, el); canvas.appendChild(el); }
+      if (editing !== n.id) fillNode(el, n, depth.get(n.id));
+    });
+
+    const size = {};
+    visible.forEach(n => { const el = els.get(n.id); size[n.id] = { w: el.offsetWidth, h: el.offsetHeight }; });
+    const colW = [];
+    visible.forEach(n => { const d = depth.get(n.id); colW[d] = Math.max(colW[d] || 0, size[n.id].w); });
+    const colX = []; let acc = 0;
+    colW.forEach((w, i) => { colX[i] = acc; acc += w + HGAP; });
+
+    pos = {}; let cursor = 0;
+    (function place(n) {
+      const d = depth.get(n.id), s = size[n.id], kids = visKids(n);
+      const p = { x: colX[d], y: 0, w: s.w, h: s.h, d }; pos[n.id] = p;
+      if (!kids.length) { p.y = cursor; cursor += s.h + VGAP; return; }
+      const start = cursor; kids.forEach(place);
+      const f = pos[kids[0].id], l = pos[kids[kids.length - 1].id];
+      p.y = Math.max(start, ((f.y + f.h / 2) + (l.y + l.h / 2)) / 2 - s.h / 2);
+      cursor = Math.max(cursor, p.y + s.h + VGAP) + GROUPGAP;
+    })(state.root);
+
+    visible.forEach(n => { const p = pos[n.id]; els.get(n.id).style.transform = `translate(${p.x}px,${p.y}px)`; });
+
+    let paths = '';
+    visible.forEach(n => {
+      const p = pos[n.id];
+      visKids(n).forEach(c => {
+        const q = pos[c.id];
+        const sx = p.x + p.w, sy = p.y + p.h / 2, ex = q.x, ey = q.y + q.h / 2, mx = (sx + ex) / 2;
+        const weight = Math.max(1, stats.get(c.id).total);
+        const w = c.type === 'note' ? '1.5' : (1.4 + Math.min(3.6, Math.log2(weight) * 1.1)).toFixed(2);
+        const cls = c.type === 'note' ? 'to-note' : complete(c) ? 'done' : '';
+        paths += `<path class="${cls}" stroke-width="${w}" d="M${sx} ${sy}C${mx} ${sy},${mx} ${ey},${ex} ${ey}"/>`;
+      });
+    });
+    links.innerHTML = paths;
+
+    if (sel) vp.setAttribute('aria-activedescendant', 'n-' + sel); else vp.removeAttribute('aria-activedescendant');
+    updateChrome();
+  }
+
+  function updateChrome() {
+    document.getElementById('btnUndo').disabled = !undoStack.length;
+    document.getElementById('btnRedo').disabled = !redoStack.length;
+    document.getElementById('btnHide').setAttribute('aria-pressed', String(hideDone));
+
+    actions.hidden = !sel || !!editing || !picker.hidden;
+    if (sel) {
+      const n = byId.get(sel), isRoot = n.type === 'root';
+      actions.querySelector('[data-act="child"]').hidden = !TYPES[n.type].allows.length;
+      actions.querySelector('[data-act="sibling"]').hidden = isRoot;
+      actions.querySelector('[data-act="toggle"]').hidden = n.type !== 'todo';
+      actions.querySelector('[data-act="kind"]').hidden = isRoot;
+      actions.querySelector('[data-act="delete"]').hidden = isRoot;
+      document.getElementById('toggleLbl').textContent = n.type === 'todo' && complete(n) ? 'Not done' : 'Done';
+    }
+
+    const root = state.root;
+    const emptyMsg = document.getElementById('emptyMsg'), emptyBtn = document.getElementById('emptyBtn');
+    if (!root.children.length) {
+      emptyEl.hidden = false;
+      emptyMsg.textContent = 'Nothing here yet. Start with a project, then fill it with todos, notes, or more projects.';
+      emptyBtn.textContent = 'Add a project'; emptyBtn.onclick = () => addChild('root', 'project');
+    } else if (!visKids(root).length && !root.collapsed) {
+      emptyEl.hidden = false; emptyMsg.textContent = 'Every item is done and hidden.';
+      emptyBtn.textContent = 'Show done items'; emptyBtn.onclick = () => { hideDone = false; render(); fit(); };
+    } else emptyEl.hidden = true;
+  }
+
+  /* ---------- View: pan & zoom ---------- */
+  let glideTimer;
+  function applyView(glide) {
+    if (glide) { vp.classList.add('glide'); clearTimeout(glideTimer); glideTimer = setTimeout(() => vp.classList.remove('glide'), 300); }
+    canvas.style.transform = `translate(${view.x}px,${view.y}px) scale(${view.k})`;
+    vp.style.backgroundPosition = `${view.x}px ${view.y}px`;
+    vp.style.backgroundSize = `${24 * view.k}px ${24 * view.k}px`;
+    if (!picker.hidden) closePicker();
+  }
+  function zoomAt(cx, cy, f, glide) {
+    const k2 = clamp(view.k * f, MINK, MAXK);
+    view.x = cx - (cx - view.x) * (k2 / view.k);
+    view.y = cy - (cy - view.y) * (k2 / view.k);
+    view.k = k2; applyView(glide);
+  }
+  function safeArea() {
+    const r = vp.getBoundingClientRect();
+    const top = topbar.getBoundingClientRect().bottom + 12;
+    return { w: r.width, h: r.height, top, bottom: r.height - 84 };
+  }
+  function fit(glide) {
+    const ids = Object.keys(pos); if (!ids.length) return;
+    let maxX = 0, maxY = -Infinity, minY = Infinity;
+    ids.forEach(id => { const p = pos[id]; maxX = Math.max(maxX, p.x + p.w + 44); maxY = Math.max(maxY, p.y + p.h); minY = Math.min(minY, p.y); });
+    const a = safeArea(), availW = a.w - 48, availH = a.bottom - a.top, H = maxY - minY;
+    const k = clamp(Math.min(1, availW / maxX, availH / H), MINK, 1);
+    view.k = k;
+    view.x = Math.max(24, (a.w - maxX * k) / 2);
+    view.y = a.top + Math.max(0, (availH - H * k) / 2) - minY * k;
+    applyView(glide);
+  }
+  function ensureVisible(id) {
+    const p = pos[id]; if (!p) return;
+    const a = safeArea(), m = 24;
+    const sx = view.x + p.x * view.k, sy = view.y + p.y * view.k, w = (p.w + 44) * view.k, h = p.h * view.k;
+    let dx = 0, dy = 0;
+    if (sx < m) dx = m - sx; else if (sx + w > a.w - m) dx = Math.max(m - sx, (a.w - m) - (sx + w));
+    if (sy < a.top) dy = a.top - sy; else if (sy + h > a.bottom) dy = a.bottom - (sy + h);
+    if (dx || dy) { view.x += dx; view.y += dy; applyView(true); }
+  }
+
+  const pts = new Map(); let panStart = null, moved = false, pinch = null, suppressClick = false;
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  vp.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.target.closest('button,[contenteditable="true"]')) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { panStart = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y }; moved = false; }
+    else if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      pinch = { d: dist(a, b) || 1, k: view.k, cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, vx: view.x, vy: view.y }; moved = true;
+    }
+  });
+  window.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) {
+      const [a, b] = [...pts.values()];
+      const k = clamp(pinch.k * dist(a, b) / pinch.d, MINK, MAXK);
+      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      view.x = cx - (pinch.cx - pinch.vx) * (k / pinch.k);
+      view.y = cy - (pinch.cy - pinch.vy) * (k / pinch.k);
+      view.k = k; applyView(); return;
+    }
+    if (panStart) {
+      const dx = e.clientX - panStart.x, dy = e.clientY - panStart.y;
+      if (!moved && Math.hypot(dx, dy) < 5) return;
+      moved = true; vp.classList.add('panning');
+      view.x = panStart.vx + dx; view.y = panStart.vy + dy; applyView();
+    }
+  });
+  function endPointer(e) {
+    if (!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId);
+    if (pts.size < 2) pinch = null;
+    if (pts.size === 0) {
+      panStart = null; vp.classList.remove('panning');
+      if (moved) { suppressClick = true; setTimeout(() => { suppressClick = false; }, 0); }
+    } else if (pts.size === 1) {
+      const [p] = [...pts.values()]; panStart = { x: p.x, y: p.y, vx: view.x, vy: view.y };
+    }
+  }
+  window.addEventListener('pointerup', endPointer);
+  window.addEventListener('pointercancel', endPointer);
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const scale = e.deltaMode === 1 ? 33 : 1;
+    if (e.ctrlKey || e.metaKey) zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * scale * 0.0025));
+    else { view.x -= e.deltaX * scale; view.y -= e.deltaY * scale; applyView(); }
+  }, { passive: false });
+
+  /* ---------- Undo & mutations ---------- */
+  function pushUndo() {
+    undoStack.push(JSON.stringify(state));
+    if (undoStack.length > 100) undoStack.shift();
+    redoStack.length = 0;
+  }
+  function mutate(fn) { pushUndo(); fn(); touched = true; render(); save(); }
+  function doUndo() {
+    if (!undoStack.length) return;
+    redoStack.push(JSON.stringify(state)); state = parseState(undoStack.pop());
+    touched = true; render(); save();
+  }
+  function doRedo() {
+    if (!redoStack.length) return;
+    undoStack.push(JSON.stringify(state)); state = parseState(redoStack.pop());
+    touched = true; render(); save();
+  }
+
+  function select(id, opts = {}) {
+    sel = id; render();
+    if (id && opts.reveal !== false) ensureVisible(id);
+  }
+  function addChild(pid, type) {
+    const p = byId.get(pid); if (!p) return;
+    if (!type) return openPicker(pid, 'add');
+    if (!allows(p, type)) return;
+    const n = mk(type, '');
+    mutate(() => { p.collapsed = false; p.children.push(n); sel = n.id; });
+    ensureVisible(n.id); startEdit(n.id, true);
+  }
+  function addSibling(id) {
+    const node = byId.get(id); if (!node) return;
+    if (node.type === 'root') return addChild('root');
+    const p = parentOf.get(id);
+    const n = mk(node.type, '');
+    mutate(() => { const i = p.children.indexOf(node); p.children.splice(i + 1, 0, n); sel = n.id; });
+    ensureVisible(n.id); startEdit(n.id, true);
+  }
+  function deleteNode(id) {
+    if (!id || id === 'root') return;
+    const n = byId.get(id), p = parentOf.get(id); if (!n || !p) return;
+    const i = p.children.indexOf(n), below = countDesc(n);
+    const next = p.children[i + 1] || p.children[i - 1] || p;
+    mutate(() => { p.children.splice(i, 1); sel = next.id; });
+    showToast(`Deleted “${n.title || 'Untitled'}”` + (below ? ` and ${below} item${below === 1 ? '' : 's'} inside it` : ''), true);
+  }
+  function toggleDone(id) {
+    const n = byId.get(id); if (!n || n.type !== 'todo') return;
+    const target = !complete(n);
+    mutate(() => { if (!n.children.some(c => c.type === 'todo')) n.done = target; else setAll(n, target); });
+  }
+  function toggleFold(id) {
+    const n = byId.get(id); if (!n || !n.children.length) return;
+    mutate(() => { n.collapsed = !n.collapsed; });
+  }
+  // Why a node can't become `type`, or null if it can.
+  function blockReason(n, type) {
+    if (n.type === type) return null;
+    const p = parentOf.get(n.id);
+    if (p && !allows(p, type)) return `A ${TYPES[p.type].label.toLowerCase()} can’t hold a ${TYPES[type].label.toLowerCase()}`;
+    const bad = n.children.find(c => !TYPES[type].allows.includes(c.type));
+    if (bad) return type === 'note' ? 'Notes can’t have anything inside them' : `It has a ${TYPES[bad.type].label.toLowerCase()} inside`;
+    return null;
+  }
+  function changeType(id, type) {
+    const n = byId.get(id); if (!n || n.type === type || blockReason(n, type)) return;
+    mutate(() => { n.type = type; if (type !== 'todo') n.done = false; });
+    ensureVisible(id);
+  }
+  function moveNode(id, dir) {
+    if (id === 'root') return;
+    const p = parentOf.get(id); const i = p.children.findIndex(c => c.id === id), j = i + dir;
+    if (j < 0 || j >= p.children.length) return;
+    mutate(() => { const [n] = p.children.splice(i, 1); p.children.splice(j, 0, n); });
+    ensureVisible(id);
+  }
+  function indent(id) {
+    if (id === 'root') return;
+    const n = byId.get(id), p = parentOf.get(id); const i = p.children.indexOf(n);
+    if (i < 1) return;
+    const np = p.children[i - 1];
+    if (!allows(np, n.type)) { showToast(`Can’t put a ${TYPES[n.type].label.toLowerCase()} inside a ${TYPES[np.type].label.toLowerCase()}`); return; }
+    mutate(() => { p.children.splice(i, 1); np.collapsed = false; np.children.push(n); });
+    ensureVisible(id);
+  }
+  function outdent(id) {
+    if (id === 'root') return;
+    const n = byId.get(id), p = parentOf.get(id), gp = parentOf.get(p.id); if (!gp) return;
+    if (!allows(gp, n.type)) { showToast(`Can’t put a ${TYPES[n.type].label.toLowerCase()} inside a ${TYPES[gp.type].label.toLowerCase()}`); return; }
+    mutate(() => { p.children.splice(p.children.indexOf(n), 1); gp.children.splice(gp.children.indexOf(p) + 1, 0, n); });
+    ensureVisible(id);
+  }
+
+  /* ---------- Type picker ---------- */
+  let pickFor = null, pickMode = 'add';
+  function openPicker(id, mode, anchor) {
+    const n = byId.get(id); if (!n) return;
+    if (mode === 'add' && !TYPES[n.type].allows.length) return;
+    pickFor = id; pickMode = mode;
+    document.getElementById('pickerHead').textContent = mode === 'add' ? `Add inside ${nameOf(n)}` : `Change ${nameOf(n)} to`;
+    picker.querySelectorAll('.pick').forEach(b => {
+      const type = b.dataset.type;
+      b.classList.remove('current'); b.disabled = false; b.title = '';
+      if (mode === 'add') { b.hidden = !allows(n, type); }
+      else {
+        b.hidden = false;
+        if (n.type === type) { b.classList.add('current'); b.disabled = true; }
+        else { const why = blockReason(n, type); if (why) { b.disabled = true; b.title = why; } }
+      }
+    });
+    picker.hidden = false;
+    // Place it next to the item (or the button that opened it), kept on screen.
+    const ref = (anchor || els.get(id) || vp).getBoundingClientRect();
+    const pw = picker.offsetWidth, ph = picker.offsetHeight, W = window.innerWidth, H = window.innerHeight;
+    let x = anchor ? ref.left : ref.right + 40, y = anchor ? ref.bottom + 8 : ref.top + ref.height / 2 - ph / 2;
+    if (x + pw > W - 12) x = Math.max(12, ref.left - pw - 12);
+    if (x < 12) x = 12;
+    if (W < 520) x = (W - pw) / 2;
+    y = clamp(y, topbar.getBoundingClientRect().bottom + 6, H - ph - 12);
+    picker.style.left = x + 'px'; picker.style.top = y + 'px';
+    updateChrome();
+    const first = picker.querySelector('.pick:not([hidden]):not(:disabled)'); if (first) first.focus({ preventScroll: true });
+  }
+  function closePicker(refocus = true) {
+    if (picker.hidden) return;
+    picker.hidden = true; pickFor = null; updateChrome();
+    if (refocus) vp.focus({ preventScroll: true });
+  }
+  function choose(type) {
+    const id = pickFor, mode = pickMode;
+    const b = picker.querySelector(`.pick[data-type="${type}"]`);
+    if (!b || b.hidden || b.disabled) return;
+    closePicker(false);
+    if (mode === 'add') addChild(id, type); else { changeType(id, type); vp.focus({ preventScroll: true }); }
+  }
+  picker.addEventListener('click', e => { const b = e.target.closest('.pick'); if (b) choose(b.dataset.type); });
+  picker.addEventListener('keydown', e => {
+    e.stopPropagation();
+    const k = e.key.toLowerCase();
+    if (TYPE_KEYS[k]) { e.preventDefault(); choose(TYPE_KEYS[k]); return; }
+    if (e.key === 'Escape') { e.preventDefault(); closePicker(); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+      e.preventDefault();
+      const opts = [...picker.querySelectorAll('.pick:not([hidden]):not(:disabled)')];
+      const i = opts.indexOf(document.activeElement);
+      const dir = (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) ? -1 : 1;
+      opts[(i + dir + opts.length) % opts.length]?.focus();
+    }
+  });
+  document.addEventListener('pointerdown', e => {
+    if (!picker.hidden && !picker.contains(e.target) && !e.target.closest('[data-act="kind"],[data-act="child"],#btnAdd,.add')) closePicker(false);
+  });
+
+  /* ---------- Inline editing ---------- */
+  function startEdit(id, isNew = false) {
+    const el = els.get(id), n = byId.get(id); if (!el || !n) return;
+    editing = id; updateChrome();
+    const t = el.querySelector('.title');
+    t.textContent = n.title;
+    t.dataset.ph = isNew ? ({ project: 'Name this project', todo: 'What needs doing?', note: 'Write a note' }[n.type] || 'Type a name') : 'Untitled';
+    t.contentEditable = 'true'; t.spellcheck = true;
+    t.focus({ preventScroll: true });
+    const r = document.createRange(); r.selectNodeContents(t);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+
+    let done = false;
+    const finish = (commit, then) => {
+      if (done) return; done = true;
+      t.removeEventListener('keydown', onKey); t.removeEventListener('blur', onBlur); t.removeEventListener('paste', onPaste);
+      t.contentEditable = 'false'; editing = null;
+      const v = t.textContent.replace(/\s+/g, ' ').trim();
+      if (commit && v) {
+        if (v !== n.title) { if (!isNew) pushUndo(); n.title = v; touched = true; save(); }
+      } else if (isNew) {
+        // Drop the empty new item without leaving an undo step behind.
+        const prev = undoStack.pop(); if (prev) state = parseState(prev);
+        sel = parentOf.get(id) ? parentOf.get(id).id : 'root';
+        then = null;
+      }
+      render();
+      vp.focus({ preventScroll: true });
+      if (then) then();
+    };
+    const onKey = e => {
+      e.stopPropagation();
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); finish(true, isNew ? () => addSibling(id) : null); }
+      else if (e.key === 'Tab') { e.preventDefault(); finish(true, () => { const m = byId.get(id); if (m && TYPES[m.type].allows.length) openPicker(id, 'add'); }); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(isNew ? !!t.textContent.trim() : false); }
+    };
+    const onBlur = () => finish(true);
+    const onPaste = e => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' ');
+      document.execCommand('insertText', false, text);
+    };
+    t.addEventListener('keydown', onKey); t.addEventListener('blur', onBlur); t.addEventListener('paste', onPaste);
+  }
+
+  /* ---------- Pointer actions on nodes ---------- */
+  vp.addEventListener('click', e => {
+    if (suppressClick) return;
+    const el = e.target.closest('.node');
+    if (!el) { if (sel && !editing) { sel = null; render(); } return; }
+    const id = el.dataset.id, btn = e.target.closest('button');
+    if (editing === id) return;
+    if (btn && btn.classList.contains('check')) { sel = id; toggleDone(id); }
+    else if (btn && btn.classList.contains('fold')) { sel = id; toggleFold(id); }
+    else if (btn && btn.classList.contains('add')) { sel = id; render(); openPicker(id, 'add'); return; }
+    else if (sel === id && e.target.closest('.title') && e.detail === 1) startEdit(id);
+    else select(id);
+    if (!editing) vp.focus({ preventScroll: true });
+  });
+
+  /* ---------- Keyboard ---------- */
+  function navVertical(dir) {
+    const p = pos[sel]; if (!p) return;
+    const same = Object.entries(pos).filter(([, q]) => q.d === p.d).sort((a, b) => a[1].y - b[1].y);
+    const i = same.findIndex(([id]) => id === sel);
+    const nx = same[i + dir]; if (nx) select(nx[0]);
+  }
+  function navRight() {
+    const n = byId.get(sel); if (!n || !n.children.length) return;
+    if (n.collapsed) mutate(() => { n.collapsed = false; });
+    const kids = visKids(n); if (!kids.length) return;
+    const p = pos[sel], cy = p.y + p.h / 2;
+    let best = kids[0], bd = Infinity;
+    kids.forEach(k => { const q = pos[k.id]; const d = Math.abs(q.y + q.h / 2 - cy); if (d < bd) { bd = d; best = k; } });
+    select(best.id);
+  }
+
+  document.addEventListener('keydown', e => {
+    if (editing || !picker.hidden) return;
+    const t = e.target;
+    if (t.closest && t.closest('input,textarea,[contenteditable="true"]')) return;
+    const mod = e.metaKey || e.ctrlKey, key = e.key;
+    if (mod && key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
+    if (mod && key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }
+    if (mod) return;
+    if (key === 'Escape' && !helpEl.hidden) { toggleHelp(false); return; }
+    if (!(t === vp || t === document.body)) return;
+
+    if (!sel && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) { e.preventDefault(); select('root'); return; }
+    const id = sel;
+    switch (key) {
+      case 'ArrowUp': e.preventDefault(); e.altKey ? moveNode(id, -1) : navVertical(-1); break;
+      case 'ArrowDown': e.preventDefault(); e.altKey ? moveNode(id, 1) : navVertical(1); break;
+      case 'ArrowLeft': e.preventDefault(); if (e.altKey) outdent(id); else { const p = parentOf.get(id); if (p) select(p.id); } break;
+      case 'ArrowRight': e.preventDefault(); e.altKey ? indent(id) : navRight(); break;
+      case 'Tab': e.preventDefault(); openPicker(id || 'root', 'add'); break;
+      case 'Enter': e.preventDefault(); if (id) addSibling(id); break;
+      case 'F2': case 'e': case 'E': if (id) { e.preventDefault(); startEdit(id); } break;
+      case ' ': case 'x': e.preventDefault(); toggleDone(id); break;
+      case 'k': case 'K': if (id && id !== 'root') { e.preventDefault(); openPicker(id, 'change'); } break;
+      case 'Delete': case 'Backspace': e.preventDefault(); deleteNode(id); break;
+      case 'c': case 'C': if (id) toggleFold(id); break;
+      case 'f': case 'F': fit(true); break;
+      case '?': toggleHelp(); break;
+      case 'Escape': if (sel) { sel = null; render(); } break;
+    }
+  });
+
+  /* ---------- Toolbar & action bar ---------- */
+  document.querySelectorAll('.topbar .tb, .actions .tb').forEach(b => b.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') e.preventDefault(); }));
+
+  const btnAdd = document.getElementById('btnAdd');
+  btnAdd.onclick = () => openPicker('root', 'add', btnAdd);
+  document.getElementById('btnHide').onclick = () => { hideDone = !hideDone; render(); };
+  document.getElementById('btnUndo').onclick = doUndo;
+  document.getElementById('btnRedo').onclick = doRedo;
+  document.getElementById('btnFit').onclick = () => fit(true);
+  document.getElementById('btnIn').onclick = () => { const a = safeArea(); zoomAt(a.w / 2, (a.top + a.bottom) / 2, 1.25, true); };
+  document.getElementById('btnOut').onclick = () => { const a = safeArea(); zoomAt(a.w / 2, (a.top + a.bottom) / 2, 0.8, true); };
+  function toggleHelp(force) {
+    const open = force ?? helpEl.hidden;
+    helpEl.hidden = !open; btnHelp.setAttribute('aria-expanded', String(open));
+  }
+  btnHelp.onclick = () => toggleHelp();
+  actions.addEventListener('click', e => {
+    const b = e.target.closest('[data-act]'); if (!b || !sel) return;
+    const id = sel;
+    ({ child: () => openPicker(id, 'add'), sibling: () => addSibling(id), toggle: () => toggleDone(id),
+       kind: () => openPicker(id, 'change'), rename: () => startEdit(id), delete: () => deleteNode(id) })[b.dataset.act]();
+  });
+
+  let toastTimer;
+  function showToast(msg, withUndo) {
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toastUndo').hidden = !withUndo;
+    toast.hidden = false; clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { toast.hidden = true; }, withUndo ? 6000 : 3500);
+  }
+  document.getElementById('toastUndo').onclick = () => { doUndo(); toast.hidden = true; };
+
+  /* ---------- Saving (on this device) ---------- */
+  let touched = false;
+  const setStatus = s => { statusEl.textContent = s; };
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); setStatus('Saved on this device'); }
+    catch (e) { setStatus('Couldn’t save. Download a backup to keep your changes.'); }
+  }
+  // Keep several open tabs in step.
+  window.addEventListener('storage', e => {
+    if (e.key !== KEY || !e.newValue || editing) return;
+    const s = parseState(e.newValue); if (s) { state = s; render(); }
+  });
+
+  /* ---------- Backup & restore ---------- */
+  document.getElementById('btnExport').onclick = () => {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `todo-tree-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    showToast('Backup downloaded');
+  };
+  const fileImport = document.getElementById('fileImport');
+  document.getElementById('btnImport').onclick = () => fileImport.click();
+  fileImport.onchange = async () => {
+    const f = fileImport.files[0]; fileImport.value = '';
+    if (!f) return;
+    const s = parseState(await f.text());
+    if (!s) { showToast('That file isn’t a Todo tree backup'); return; }
+    pushUndo(); state = s; sel = null; touched = true; render(); fit(true); save();
+    showToast('Backup restored', true);
+  };
+
+  /* ---------- Install & offline ---------- */
+  let installEvt = null;
+  const btnInstall = document.getElementById('btnInstall');
+  window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; btnInstall.hidden = false; });
+  btnInstall.onclick = async () => {
+    if (!installEvt) return;
+    installEvt.prompt(); await installEvt.userChoice.catch(() => {});
+    installEvt = null; btnInstall.hidden = true;
+  };
+  window.addEventListener('appinstalled', () => { btnInstall.hidden = true; showToast('Installed. Open Todo tree from your apps.'); });
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+
+  /* ---------- Start ---------- */
+  render(); fit(); save();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!editing) { render(); fit(); } });
+  window.addEventListener('resize', () => { closePicker(false); if (sel) ensureVisible(sel); });
+  vp.focus({ preventScroll: true });
+})();
+</script>
+</body>
+</html>
