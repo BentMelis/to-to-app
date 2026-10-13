@@ -1,10 +1,24 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
-import { countDesc, isComplete, type TreeIndex } from '@/lib/tree/model';
-import { TYPES, type TreeNode } from '@/lib/tree/types';
+import { countDesc, isComplete, worstDueBelow, type TreeIndex } from '@/lib/tree/model';
+import { daysUntil, describeDue, dueLevel, formatDue } from '@/lib/tree/dates';
+import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
-import { IconCheck, IconPlus } from './icons';
+import type { Meeting } from '@/lib/tree/types';
+import { FlagBadge, flagLabel } from './FlagBadge';
+import { IconCalendar, IconCheck, IconNotes, IconPlus } from './icons';
+
+/** The first meeting (in the user's order) that something inside `nodes` is flagged for, if any. */
+function firstFlagged(nodes: TreeNode[], meetings: Meeting[], deep: boolean): Meeting | null {
+  const ids = new Set<string>();
+  const walk = (n: TreeNode) => {
+    Object.keys(n.flags ?? {}).forEach((k) => ids.add(k));
+    if (deep) n.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return meetings.find((m) => ids.has(m.id)) ?? null;
+}
 
 const PLACEHOLDER: Record<string, string> = { project: 'Name this project', todo: 'What needs doing?', note: 'Write a note' };
 
@@ -17,12 +31,20 @@ interface Props {
   stats: Stats;
   selected: boolean;
   dim: boolean;
+  /** Shown only as the path to a filter match. */
+  context?: boolean;
   editing: { isNew: boolean } | null;
+  /** Children hidden: folded by the user, or finished and not opened. */
+  folded: boolean;
+  /** The user's meetings & people, in their order (for flag badges). */
+  meetings: Meeting[];
+  /** Today's date (YYYY-MM-DD); passed in so deadline colours update when the day changes. */
+  today: string;
   register: (id: string, el: HTMLElement | null) => void;
   onEditEnd: (id: string, e: EditEnd) => void;
 }
 
-function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editing, register, onEditEnd }: Props) {
+function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, register, onEditEnd }: Props) {
   const type = n.type;
   const isRoot = type === 'root';
   const hasKids = n.children.length > 0;
@@ -30,7 +52,13 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editi
   const parent = idx.parentOf.get(n.id);
   const name = n.title || 'Untitled';
   const mixed = type === 'todo' && hasKids && !comp && s.done > 0;
-  const showMeta = isRoot ? hasKids : type === 'project' || (type === 'todo' && s.total > 1);
+  const showProgress = isRoot ? hasKids : type === 'project' || (type === 'todo' && s.total > 1);
+  const showMeta = showProgress || !!n.due;
+  const due = n.due ? { label: formatDue(n.due, today), level: comp ? 'done' : dueLevel(daysUntil(n.due, today)), text: describeDue(n.due, today) } : null;
+  const hiddenDue = folded ? worstDueBelow(n, idx, today) : null;
+  const hiddenFlag = folded ? firstFlagged(n.children, meetings, true) : null;
+  const hiddenAsk = !!hiddenFlag;
+  const flags = meetings.filter((m) => n.flags?.[m.id]).map((m) => ({ m, kind: n.flags![m.id] }));
   const pct = s.total ? Math.round((100 * s.done) / s.total) : 0;
 
   const cls = [
@@ -42,6 +70,11 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editi
     comp && !isRoot && 'finished',
     selected && 'selected',
     dim && 'dim',
+    context && 'context',
+    flags.length > 0 && 'asking',
+    n.high && 'high',
+    n.notes && canHaveNotes(type) && 'has-notes',
+    due && !comp && `due-${due.level}`,
   ]
     .filter(Boolean)
     .join(' ');
@@ -55,8 +88,14 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editi
       role="treeitem"
       aria-level={depth + 1}
       aria-selected={selected}
-      aria-label={(isRoot ? '' : TYPES[type].label + ': ') + name}
-      aria-expanded={hasKids ? !n.collapsed : undefined}
+      aria-label={
+        (isRoot ? '' : TYPES[type].label + ': ') +
+        name +
+        (n.high ? ', high priority' : '') +
+        (due ? ', ' + due.text : '') +
+        flags.map((f) => ', ' + flagLabel(f.kind, f.m).toLowerCase()).join('')
+      }
+      aria-expanded={hasKids ? !folded : undefined}
     >
       {type === 'todo' && (
         <button
@@ -71,6 +110,18 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editi
         </button>
       )}
       {type === 'project' && <span className="ring" aria-hidden="true" style={{ ['--p' as string]: pct }} />}
+      {n.high && (
+        <span className="prio-badge" title="High priority" aria-hidden="true">
+          !
+        </span>
+      )}
+      {flags.length > 0 && (
+        <span className="flag-badges">
+          {flags.map((f) => (
+            <FlagBadge key={f.m.id} kind={f.kind} meeting={f.m} />
+          ))}
+        </span>
+      )}
       <div className="body">
         {editing ? (
           <TitleInput node={n} isNew={editing.isNew} onEnd={(e) => onEditEnd(n.id, e)} />
@@ -81,21 +132,53 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, editi
         )}
         {showMeta && (
           <div className="meta">
-            <span className="count">
-              {s.total === 0 ? (hasKids ? 'No todos yet' : 'Empty') : isRoot ? `${s.done} of ${s.total} done` : `${s.done}/${s.total}`}
-            </span>
-            {s.total > 0 && (
-              <span className="bar">
-                <i style={{ width: `${pct}%` }} />
+            {due && (
+              <span className={`due-chip ${due.level}`} title={due.text}>
+                <IconCalendar />
+                {due.label}
               </span>
+            )}
+            {showProgress && (
+              <>
+                <span className="count">
+                  {s.total === 0 ? (hasKids ? 'No todos yet' : 'Empty') : isRoot ? `${s.done} of ${s.total} done` : `${s.done}/${s.total}`}
+                </span>
+                {s.total > 0 && (
+                  <span className="bar">
+                    <i style={{ width: `${pct}%` }} />
+                  </span>
+                )}
+              </>
             )}
           </div>
         )}
       </div>
       <div className="handles">
         {hasKids && (
-          <button className="fold" tabIndex={-1} data-act="fold" aria-label={(n.collapsed ? 'Expand ' : 'Collapse ') + name}>
-            {n.collapsed ? '+' + countDesc(n) : '−'}
+          <button
+            className={'fold' + (hiddenFlag ? ` has-ask m-${hiddenFlag.color}` : '') + (hiddenDue && hiddenDue !== 'later' ? ` has-due-${hiddenDue}` : '')}
+            tabIndex={-1}
+            data-act="fold"
+            title={hiddenDue === 'urgent' ? 'A deadline inside is due within a day' : hiddenDue === 'soon' ? 'A deadline inside is due within 3 days' : undefined}
+            aria-label={
+              (folded ? 'Expand ' : 'Collapse ') +
+              name +
+              (hiddenAsk ? ' (has things to bring up inside)' : '') +
+              (hiddenDue === 'urgent' ? ' (deadline due within a day inside)' : hiddenDue === 'soon' ? ' (deadline due soon inside)' : '')
+            }
+          >
+            {folded ? '+' + countDesc(n) : '−'}
+          </button>
+        )}
+        {canHaveNotes(type) && (
+          <button
+            className={'notes-btn' + (n.notes ? ' filled' : '')}
+            tabIndex={-1}
+            data-act="notes"
+            aria-label={(n.notes ? 'Read notes: ' : 'Add notes: ') + name}
+            title={n.notes ? n.notes.slice(0, 140) + (n.notes.length > 140 ? '…' : '') : 'Add notes'}
+          >
+            <IconNotes />
           </button>
         )}
         {TYPES[type].allows.length > 0 && (
@@ -158,16 +241,20 @@ export const StackView = memo(function StackView({
   items,
   selected,
   dim,
+  meetings,
   register,
 }: {
   id: string;
   items: TreeNode[];
   selected: boolean;
   dim: boolean;
+  meetings: Meeting[];
   register: (id: string, el: HTMLElement | null) => void;
 }) {
   const top = items[0];
   const label = `${items.length} done`;
+  const asks = items.filter((i) => i.flags && Object.keys(i.flags).length > 0).length;
+  const flagColor = firstFlagged(items, meetings, false)?.color;
   return (
     <div
       ref={(el) => register(id, el)}
@@ -194,6 +281,9 @@ export const StackView = memo(function StackView({
         </div>
       </div>
       <div className="handles">
+        {asks > 0 && (
+          <span className={`flag-dot m-${flagColor}`} title={`${asks} item${asks === 1 ? '' : 's'} to bring up in here`} aria-hidden="true" />
+        )}
         <span className="stack-badge">{items.length}</span>
       </div>
     </div>

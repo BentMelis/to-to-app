@@ -39,3 +39,26 @@ export const IconFocus = () => (
     <circle cx="8" cy="8" r="2" fill="currentColor" />
   </svg>
 );
+export const IconCalendar = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="2.5" y="3.5" width="11" height="10" rx="2" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M2.5 7h11M5.5 2v3M10.5 2v3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);
+export const IconFilter = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M2.5 3.5h11l-4.25 5v4l-2.5 1.25V8.5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+  </svg>
+);
+export const IconNotes = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M4 2.5h5.5L12.5 5.5v8H4z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+    <path d="M6 8h4.5M6 10.5h4.5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
+export const IconMeetings = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M2.5 3.5h8a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H6l-2.5 2v-2h-1a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    <path d="M13.5 6.5v4a1 1 0 0 1-1 1h-.5v1.8L10 11.5H8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);

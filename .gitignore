@@ -42,3 +42,4 @@ next-env.d.ts
 
 # delivery archive
 todo-tree-nextjs.tgz
+_to_delete/

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "TZ=Europe/Brussels vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

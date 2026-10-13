@@ -2,7 +2,8 @@
 
 import { forwardRef } from 'react';
 import type { SaveStatus } from '@/lib/tree/useTreeStore';
-import { IconDownload, IconFocus, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
+import { anyFilter, type Filters } from '@/lib/tree/layout';
+import { IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: '',
@@ -18,6 +19,15 @@ interface Props {
   canRedo: boolean;
   status: SaveStatus;
   helpOpen: boolean;
+  meetingsOpen: boolean;
+  flaggedCount: number;
+  /** Meetings/people that have something flagged, in their own colours. */
+  meetingDots: { id: string; name: string; color: string; count: number }[];
+  onMeetings: () => void;
+  filters: Filters;
+  filterMatches: number;
+  filterOpen: boolean;
+  onFilter: (anchor: DOMRect) => void;
   onAdd: (anchor: DOMRect) => void;
   onHideDone: () => void;
   onFocusMode: () => void;
@@ -49,6 +59,39 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         <button className="tb" aria-pressed={p.focusMode} title="Focus on the selected project: fade the rest and centre it" onClick={p.onFocusMode}>
           <IconFocus />
           Focus
+        </button>
+        <button
+          className={'tb' + (anyFilter(p.filters) ? ' filtering' : '')}
+          data-filter-button
+          aria-pressed={anyFilter(p.filters)}
+          aria-expanded={p.filterOpen}
+          title="Show only high-priority or soon-due items"
+          onClick={(e) => p.onFilter(e.currentTarget.getBoundingClientRect())}
+        >
+          <IconFilter />
+          {!anyFilter(p.filters) ? 'Filter' : p.filters.high && p.filters.dueSoon ? 'Priority + due soon' : p.filters.high ? 'High priority' : 'Due soon'}
+          {anyFilter(p.filters) && <span className="filter-count">{p.filterMatches}</span>}
+        </button>
+      </div>
+      <div className="group">
+        <button
+          className="tb"
+          aria-pressed={p.meetingsOpen}
+          title="Things to ask or mention, per meeting or person"
+          aria-label={`To bring up: ${p.flaggedCount} item${p.flaggedCount === 1 ? '' : 's'}`}
+          onClick={p.onMeetings}
+        >
+          <IconMeetings />
+          Meetings
+          {p.meetingDots.length > 0 && (
+            <span className="m-dots" aria-hidden="true">
+              {p.meetingDots.map((m) => (
+                <span key={m.id} className={`m-count m-${m.color}`} title={`${m.name}: ${m.count}`}>
+                  {m.count}
+                </span>
+              ))}
+            </span>
+          )}
         </button>
       </div>
       <span className="status" aria-live="polite">

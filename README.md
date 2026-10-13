@@ -29,6 +29,21 @@ npm run dev        # http://localhost:3000
   camera to centre it. Toggle with the **Focus** button.
 - **Finished items** — turn grey, sink to the bottom of their branch, and two or more stack into a single card.
   Click the stack (or `Enter`) to look through them; they restack when you move away, or press `S`.
+- **Meetings & people** — press `Q` (or *Bring up…*) to flag an item for a meeting or a person: **ask** a question
+  (solid `?` tag) or just **mention** it, e.g. "this is done" (outlined megaphone tag). Each meeting/person has its own
+  colour; manage them under **Meetings → Edit** (up to 9: standup, weekly sync, a stakeholder…). The **Meetings** panel
+  shows per meeting *To ask* and *To mention* (finished items marked *Done ✓*), jumps to items, clears them once raised,
+  and copies a ready-to-paste agenda. Old "open question for standup" flags are migrated automatically.
+- **Priority & deadlines** — `H` marks a todo or project as high priority (purple `!`). `D` sets a deadline
+  (quick picks: today, tomorrow, next Monday, in a week, or any date). The item turns **orange** when 3 days or fewer
+  are left and **red** from the last day on (due tomorrow, today or overdue). A collapsed branch hiding such an item
+  shows the colour on its fold button. Finished items never warn. Colours update by themselves when the day changes.
+- **Filters** — the **Filter** menu shows only open *high-priority* items and/or items *due soon* (orange/red),
+  plus the path above them (faded) and everything inside them. Filters combine as "any of", open folded branches
+  that hide a match, and are remembered per browser.
+- **Notes on projects and todos** — press `N`, click *Notes* in the action bar, or the page icon next to an item to
+  open a centred notes dialog for longer context (links, decisions, who to ask). It saves as you type (one undo step
+  per editing session); Esc, ⌘/Ctrl+Enter, *Done* or clicking outside closes it. Items with notes show a filled page icon.
 - Backup download / restore (.json), self-hosted fonts (works fully offline, nothing sent to Google).
 
 ## Project layout
@@ -39,10 +54,16 @@ src/
   components/
     TodoTree.tsx        The canvas: state, camera (pan/zoom/focus), keyboard, drag & drop
     TreeNodeView.tsx    A single item + the finished-items stack card
+    MeetingsPanel.tsx   Per meeting/person: to ask, to mention; manage meetings
+    FlagMenu.tsx        "Bring up … at" menu (ask / mention per meeting)
+    DuePicker.tsx       Set / change / remove a deadline
+    FilterMenu.tsx      High priority / due soon filters
+    NotesPanel.tsx      Centred notes dialog for a project or todo
     Toolbar.tsx, TypePicker.tsx, HelpPanel.tsx, icons.tsx, ServiceWorker.tsx
   lib/
     tree/types.ts       Node types and which types may contain which
     tree/model.ts       Pure, immutable tree operations (add, move, moveTo, indent, toggle…) + stats
+    tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout
     tree/useTreeStore.ts  Document + undo/redo + debounced persistence
     storage/index.ts    StorageAdapter interface, localStorage adapter, import/export

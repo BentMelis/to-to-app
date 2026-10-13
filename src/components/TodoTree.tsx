@@ -3,13 +3,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { exportDoc, importDoc, localAdapter } from '@/lib/storage';
 import * as M from '@/lib/tree/model';
-import { branchBounds, isStackId, layout, stackId, visibleTree, VGAP, type Box, type VisItem } from '@/lib/tree/layout';
+import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
+import { FilterMenu } from './FilterMenu';
+import { NotesPanel } from './NotesPanel';
+import { branchBounds, isFolded, isStackId, layout, stackId, visibleTree, VGAP, type Box, type VisItem } from '@/lib/tree/layout';
 import { TYPES, type ChildType, type TreeDoc, type TreeNode } from '@/lib/tree/types';
 import { useTreeStore } from '@/lib/tree/useTreeStore';
 import { StackView, TreeNodeView, type EditEnd } from './TreeNodeView';
 import { TypePicker, type PickerState } from './TypePicker';
 import { Toolbar } from './Toolbar';
 import { HelpPanel } from './HelpPanel';
+import { MeetingsPanel } from './MeetingsPanel';
+import { FlagMenu } from './FlagMenu';
+import { DuePicker } from './DuePicker';
+import { describeDue, formatDue, todayISO } from '@/lib/tree/dates';
+import { canHaveNotes, canSchedule } from '@/lib/tree/types';
 
 const MINK = 0.3;
 const MAXK = 2;
@@ -34,13 +42,70 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   const [hideDone, setHideDone] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
   const [openStacks, setOpenStacks] = useState<Set<string>>(() => new Set());
+  // Finished items start folded; these are the ones the user opened to look inside.
+  const [openDone, setOpenDone] = useState<Set<string>>(() => new Set());
   const [picker, setPicker] = useState<PickerState | null>(null);
+  const [duePicker, setDuePicker] = useState<string | null>(null);
+  // Deadline colours depend on the date, so re-check it now and then (and when the tab comes back).
+  const [today, setToday] = useState(todayISO);
+  useEffect(() => {
+    const tick = () => setToday(todayISO());
+    const t = setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, []);
   const [toast, setToast] = useState<{ msg: string; undo: boolean; key: number } | null>(null);
-  const [help, setHelp] = useState(false);
+  const [panel, setPanel] = useState<'help' | 'meetings' | null>(null);
+  // The item whose notes are open in the centred notes dialog.
+  const [notesFor, setNotesFor] = useState<string | null>(null);
+  const [flagMenu, setFlagMenu] = useState<string | null>(null);
+  const [manageMeetings, setManageMeetings] = useState(false);
+  // Last meeting tab looked at (a viewing preference, remembered per browser).
+  const [activeMeeting, setActiveMeetingRaw] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('todo-tree:meeting');
+    } catch {
+      return null;
+    }
+  });
+  const setActiveMeeting = (id: string) => {
+    setActiveMeetingRaw(id);
+    try {
+      localStorage.setItem('todo-tree:meeting', id);
+    } catch {
+      /* not remembered */
+    }
+  };
+  const help = panel === 'help';
   const [, setTick] = useState(0);
 
   const idx = useMemo(() => M.buildIndex(doc.root), [doc]);
-  const vis = useMemo(() => visibleTree(doc.root, idx, { hideDone, openStacks }), [doc, idx, hideDone, openStacks]);
+  const flaggedCount = useMemo(() => M.countFlagged(doc.root), [doc]);
+  // Filters are remembered per browser (a viewing preference, not part of the tree).
+  const [filters, setFiltersRaw] = useState<Filters>(() => {
+    try {
+      return { ...NO_FILTERS, ...JSON.parse(localStorage.getItem('todo-tree:filters') || '{}') };
+    } catch {
+      return NO_FILTERS;
+    }
+  });
+  const [filterMenu, setFilterMenu] = useState<DOMRect | null>(null);
+  const filter = useMemo(() => applyFilters(doc.root, idx, filters, today), [doc, idx, filters, today]);
+  const filterCounts = useMemo(() => {
+    const c = { high: 0, dueSoon: 0 };
+    for (const n of idx.byId.values()) {
+      if (matchesFilters(n, idx, { high: true, dueSoon: false }, today)) c.high++;
+      if (matchesFilters(n, idx, { high: false, dueSoon: true }, today)) c.dueSoon++;
+    }
+    return c;
+  }, [idx, today]);
+  const vis = useMemo(
+    () => visibleTree(doc.root, idx, { hideDone, openStacks, openDone, filter }),
+    [doc, idx, hideDone, openStacks, openDone, filter],
+  );
 
   // A selection that disappeared (deleted, hidden, folded away) falls back to its nearest visible ancestor.
   const visIds = useMemo(() => new Set(vis.items.map((i) => i.id)), [vis]);
@@ -107,7 +172,10 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   const safeArea = useCallback(() => {
     const r = vpRef.current!.getBoundingClientRect();
     const top = (topbarRef.current?.getBoundingClientRect().bottom ?? 60) + 12;
-    return { w: r.width, h: r.height, top, bottom: r.height - 84 };
+    // On wide screens, keep framed content clear of an open side panel.
+    const panel = document.querySelector('.panel')?.getBoundingClientRect();
+    const w = panel && r.width > 900 ? panel.left - 12 : r.width;
+    return { w, h: r.height, top, bottom: r.height - 84 };
   }, []);
 
   const frame = useCallback(
@@ -223,10 +291,9 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
       setOpenStacks((prev) => {
         if (!prev.size) return prev;
         if (id && !isStackId(id) && !idx.byId.has(id)) return prev; // just created; not indexed yet
-        const keep = new Set<string>();
-        const parent = id && !isStackId(id) ? idx.parentOf.get(id) : null;
-        if (parent && prev.has(parent.id)) keep.add(parent.id);
-        if (id && prev.has(id)) keep.add(id);
+        // Keep stacks along the path to the selection (and the selection's own); restack the rest.
+        const target = id && isStackId(id) ? id.slice(6) : id;
+        const keep = new Set([...prev].filter((p) => !!target && (p === target || M.isAncestor(idx, p, target))));
         return keep.size === prev.size ? prev : keep;
       });
     },
@@ -242,6 +309,28 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const setFilters = (f: Filters) => {
+    setFiltersRaw(f);
+    try {
+      localStorage.setItem('todo-tree:filters', JSON.stringify(f));
+    } catch {
+      /* private mode etc.: the filter just isn't remembered */
+    }
+    requestAnimationFrame(() => fit(true));
+  };
+
+  // A side panel opening can cover the selection: re-frame around it.
+  useEffect(() => {
+    if (!panel || !selId) return;
+    const f = focusId;
+    requestAnimationFrame(() => {
+      if (f) frame(branchBounds(visRef.current, pos.current, f), 1, true);
+      else ensureVisible(selId);
+    });
+    // Only when a panel opens or closes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panel]);
 
   /* ---------- Toast ---------- */
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -321,6 +410,124 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     if (!r) return;
     store.commit(r.doc);
     setSel(id);
+    // Safety net: say so (with undo) when this tick finished a whole branch.
+    if (r.done) {
+      const after = M.buildIndex(r.doc.root);
+      let top: string | null = null;
+      for (let p = idx.parentOf.get(id); p && p.type !== 'root'; p = idx.parentOf.get(p.id) ?? null) {
+        if (!M.isComplete(idx, p) && M.isComplete(after, after.byId.get(p.id)!)) top = p.title || 'Untitled';
+      }
+      if (top) showToast(`“${top}” is all done`, true);
+    }
+  }
+
+  /** Open or close an item's branch. Finished items open in the view only; others fold in the saved tree. */
+  function fold(id: string, open?: boolean) {
+    const n = idx.byId.get(id);
+    if (!n || !n.children.length) return;
+    const folded = isFolded(n, idx, { openDone });
+    const wantOpen = open ?? folded;
+    if (wantOpen === folded) {
+      const finished = n.id !== 'root' && M.isComplete(idx, n);
+      if (wantOpen) {
+        if (finished) setOpenDone((s) => new Set(s).add(id));
+        if (n.collapsed) apply(M.toggleFold(doc, id, false));
+      } else if (finished && !n.collapsed) {
+        setOpenDone((s) => {
+          const x = new Set(s);
+          x.delete(id);
+          return x;
+        });
+      } else apply(M.toggleFold(doc, id, true));
+    }
+    setSel(id);
+  }
+
+  function openNotes(id: string) {
+    const n = idx.byId.get(id);
+    if (!n || !canHaveNotes(n.type)) return;
+    setSel(id);
+    setNotesFor(id);
+  }
+
+  function setFlag(id: string, meetingId: string, kind: 'ask' | 'mention' | null) {
+    const r = M.setFlag(doc, id, meetingId, kind);
+    if (!r) return;
+    store.commit(r.doc);
+    setSel(id);
+  }
+
+  function openFlagMenu(id: string) {
+    const n = idx.byId.get(id);
+    if (!n || n.type === 'root') return;
+    setSel(id);
+    setFlagMenu(id);
+  }
+
+  /** Make an item visible (unfold, unstack, unhide) and select it. */
+  function reveal(id: string) {
+    const n = idx.byId.get(id);
+    if (!n) return;
+    const r = M.unfoldTo(doc, id);
+    if (r) store.commit(r.doc);
+    // Open any finished ancestors and the stacks they sit in.
+    const stacks: string[] = [];
+    const done: string[] = [];
+    for (let c: TreeNode | null = n; c && c.type !== 'root'; c = idx.parentOf.get(c.id) ?? null) {
+      if (!M.isComplete(idx, c)) continue;
+      if (c !== n) done.push(c.id);
+      const p = idx.parentOf.get(c.id);
+      if (p) stacks.push(p.id);
+    }
+    if (stacks.length && hideDone) setHideDone(false);
+    if (done.length) setOpenDone((s) => new Set([...s, ...done]));
+    if (stacks.length) setOpenStacks((s) => new Set([...s, ...stacks]));
+    setSel(id);
+  }
+
+  function toggleHigh(id: string) {
+    const r = M.toggleHigh(doc, id);
+    if (!r) return;
+    store.commit(r.doc);
+    setSel(id);
+  }
+
+  function setDue(id: string, due: string | null) {
+    setDuePicker(null);
+    focusCanvas();
+    const r = M.setDue(doc, id, due);
+    if (!r) return;
+    store.commit(r.doc);
+    setSel(id);
+    showToast(due ? describeDue(due, today) : 'Deadline removed', true);
+  }
+
+  /**
+   * Typing in the notes panel: the first change of a session is one undo step, the rest of the
+   * session updates it in place. Uses the latest doc, since the panel saves on a timer.
+   */
+  const notesSession = useRef<string | null>(null);
+  function editNotes(id: string, text: string) {
+    const cur = latest.current.doc;
+    const r = M.setNotes(cur, id, text);
+    if (!r) return;
+    if (notesSession.current === id) store.replace(r.doc);
+    else {
+      store.commit(r.doc);
+      notesSession.current = id;
+    }
+  }
+
+  async function copyMeeting(meetingId: string) {
+    const m = doc.meetings.find((x) => x.id === meetingId);
+    if (!m) return;
+    const items = M.collectFlags(doc.root, idx, meetingId);
+    try {
+      await navigator.clipboard.writeText(M.meetingAsText(m, items));
+      showToast(`Copied ${items.length} item${items.length === 1 ? '' : 's'} for ${m.name}`);
+    } catch {
+      showToast('Couldn’t copy. Your browser blocked the clipboard.');
+    }
   }
 
   const openStack = (parentId: string) => {
@@ -626,14 +833,16 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     }
     const act = t.closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'check') toggleDone(id);
-    else if (act === 'fold') {
-      setSel(id);
-      apply(M.toggleFold(doc, id));
+    else if (act === 'fold') fold(id);
+    else if (act === 'notes') {
+      openNotes(id);
+      return;
     } else if (act === 'add') {
       setSel(id);
       setPicker({ forId: id, mode: 'add' });
       return;
-    } else if (selId === id && t.closest('.title') && e.detail === 1) {
+    } else if (sel === id && t.closest('.title') && e.detail === 1) {
+      // Only an item the user explicitly selected goes into rename on a second click, not one the selection fell back to.
       setEditing({ id, isNew: false });
       return;
     } else setSel(id);
@@ -656,7 +865,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     if (isStackId(selId)) return openStack(selId.slice(6));
     const n = idx.byId.get(selId);
     if (!n || !n.children.length) return;
-    if (n.collapsed) return void apply(M.toggleFold(doc, n.id, false));
+    if (isFolded(n, idx, { openDone })) return fold(n.id, true);
     const kids = vis.kids.get(selId) || [];
     if (!kids.length) return;
     const p = pos.current[selId], cy = p.y + p.h / 2;
@@ -673,7 +882,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (editing || picker) return;
+    if (editing || picker || duePicker || flagMenu || notesFor) return;
     const t = e.target as HTMLElement;
     if (t.closest?.('input,textarea,[contenteditable="true"]')) return;
     const mod = e.metaKey || e.ctrlKey, key = e.key;
@@ -689,7 +898,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
       return;
     }
     if (mod) return;
-    if (key === 'Escape' && help) return setHelp(false);
+    if (key === 'Escape' && panel) return setPanel(null);
     if (!(t === vpRef.current || t === document.body)) return;
     if (!selId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
       e.preventDefault();
@@ -750,6 +959,34 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         e.preventDefault();
         if (id) toggleDone(id);
         break;
+      case 'n':
+      case 'N': {
+        if (id) {
+          e.preventDefault();
+          openNotes(id);
+        }
+        break;
+      }
+      case 'q':
+      case 'Q':
+        if (id && id !== 'root') {
+          e.preventDefault();
+          openFlagMenu(id);
+        }
+        break;
+      case 'h':
+      case 'H':
+        if (id) toggleHigh(id);
+        break;
+      case 'd':
+      case 'D': {
+        const n = id ? idx.byId.get(id) : null;
+        if (n && canSchedule(n.type)) {
+          e.preventDefault();
+          setDuePicker(n.id);
+        }
+        break;
+      }
       case 'k':
       case 'K':
         if (id && id !== 'root') {
@@ -770,14 +1007,14 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         break;
       case 'c':
       case 'C':
-        if (id) apply(M.toggleFold(doc, id));
+        if (id) fold(id);
         break;
       case 'f':
       case 'F':
         fit(true);
         break;
       case '?':
-        setHelp((h) => !h);
+        setPanel((p) => (p === 'help' ? null : 'help'));
         break;
       case 'Escape':
         if (selId) setSel(null);
@@ -823,7 +1060,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
           <div className="drop-line" ref={dropLineRef} hidden />
           {vis.items.map((it) =>
             it.kind === 'stack' ? (
-              <StackView key={it.id} id={it.id} items={it.items} selected={selId === it.id} dim={isDim(it)} register={register} />
+              <StackView key={it.id} id={it.id} items={it.items} selected={selId === it.id} dim={isDim(it)} meetings={doc.meetings} register={register} />
             ) : (
               <TreeNodeView
                 key={it.id}
@@ -833,7 +1070,11 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
                 stats={idx.stats.get(it.id)!}
                 selected={selId === it.id}
                 dim={isDim(it)}
+                context={!!filter && filter.context.has(it.id) && !matchesFilters(it.node, idx, filters, today)}
                 editing={editing?.id === it.id ? editing : null}
+                meetings={doc.meetings}
+                folded={!filter?.context.has(it.id) && isFolded(it.node, idx, { openDone })}
+                today={today}
                 register={register}
                 onEditEnd={onEditEnd}
               />
@@ -850,9 +1091,17 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         canRedo={store.canRedo}
         status={store.status}
         helpOpen={help}
+        meetingsOpen={panel === 'meetings'}
+        flaggedCount={flaggedCount}
+        meetingDots={doc.meetings.map((m) => ({ id: m.id, name: m.name, color: m.color, count: M.collectFlags(doc.root, idx, m.id).length })).filter((m) => m.count > 0)}
+        onMeetings={() => setPanel((p) => (p === 'meetings' ? null : 'meetings'))}
         onAdd={(anchor) => setPicker({ forId: 'root', mode: 'add', anchor })}
         onHideDone={() => setHideDone((v) => !v)}
         onFocusMode={() => setFocusMode((v) => !v)}
+        filters={filters}
+        filterMatches={filter?.matches ?? 0}
+        filterOpen={!!filterMenu}
+        onFilter={(r) => setFilterMenu((m) => (m ? null : r))}
         onUndo={store.undo}
         onRedo={store.redo}
         onFit={() => fit(true)}
@@ -860,13 +1109,111 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
           const a = safeArea();
           zoomAt(a.w / 2, (a.top + a.bottom) / 2, f, true);
         }}
-        onHelp={() => setHelp((h) => !h)}
+        onHelp={() => setPanel((p) => (p === 'help' ? null : 'help'))}
         onExport={() => exportDoc(doc)}
         onImport={() => fileRef.current?.click()}
       />
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { onImport(e.target.files?.[0]); e.target.value = ''; }} />
 
       {help && <HelpPanel />}
+      {filterMenu && (
+        <FilterMenu
+          filters={filters}
+          counts={filterCounts}
+          anchor={filterMenu}
+          onChange={setFilters}
+          onClose={(refocus) => {
+            setFilterMenu(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
+      {notesFor && idx.byId.get(notesFor) && (
+        <NotesPanel
+          node={idx.byId.get(notesFor)!}
+          path={M.pathTo(idx, notesFor)}
+          onChange={editNotes}
+          onSessionEnd={() => (notesSession.current = null)}
+          onClose={() => {
+            setNotesFor(null);
+            focusCanvas();
+          }}
+        />
+      )}
+      {panel === 'meetings' && (
+        <MeetingsPanel
+          meetings={doc.meetings}
+          itemsFor={(mid) => M.collectFlags(doc.root, idx, mid)}
+          active={activeMeeting}
+          onActive={setActiveMeeting}
+          selectedId={selId}
+          manage={manageMeetings}
+          onManage={setManageMeetings}
+          onGo={(id) => {
+            reveal(id);
+            focusCanvas();
+          }}
+          onRaised={(id, mid) => {
+            const r = M.setFlag(doc, id, mid, null);
+            if (!r) return;
+            store.commit(r.doc);
+            showToast('Done, taken off the list', true);
+          }}
+          onCopy={copyMeeting}
+          onAdd={(name) => {
+            const r = M.addMeeting(doc, name);
+            if (!r) return;
+            store.commit(r.doc);
+            setActiveMeeting(r.id);
+          }}
+          onUpdate={(mid, patch) => apply(M.updateMeeting(doc, mid, patch))}
+          onRemove={(mid) => {
+            const m = doc.meetings.find((x) => x.id === mid);
+            const r = M.removeMeeting(doc, mid);
+            if (!r || !m) return;
+            store.commit(r.doc);
+            showToast(`Removed “${m.name}”`, true);
+          }}
+          onClose={() => {
+            setPanel(null);
+            setManageMeetings(false);
+            focusCanvas();
+          }}
+        />
+      )}
+
+      {flagMenu && idx.byId.get(flagMenu) && (
+        <FlagMenu
+          node={idx.byId.get(flagMenu)!}
+          meetings={doc.meetings}
+          getAnchor={() => els.current.get(flagMenu) ?? null}
+          getTop={() => topbarRef.current?.getBoundingClientRect().bottom ?? 60}
+          onSet={(mid, kind) => setFlag(flagMenu, mid, kind)}
+          onManage={() => {
+            setFlagMenu(null);
+            setManageMeetings(true);
+            setPanel('meetings');
+          }}
+          onClose={(refocus) => {
+            setFlagMenu(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
+
+      {duePicker && idx.byId.get(duePicker) && (
+        <DuePicker
+          node={idx.byId.get(duePicker)!}
+          today={today}
+          getAnchor={() => els.current.get(duePicker) ?? null}
+          getTop={() => topbarRef.current?.getBoundingClientRect().bottom ?? 60}
+          onSet={(due) => setDue(duePicker, due)}
+          onClose={(refocus) => {
+            setDuePicker(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
 
       {picker && (
         <TypePicker
@@ -882,7 +1229,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         />
       )}
 
-      {selId && !editing && !picker && (
+      {selId && !editing && !picker && !duePicker && !flagMenu && !notesFor && (
         <nav className="group actions" aria-label="Selected item">
           {isStackId(selId) ? (
             <button className="tb" onClick={() => openStack(selId.slice(6))}>
@@ -908,6 +1255,26 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
               {selParent && openStacks.has(selParent.id) && M.isComplete(idx, selNode) && (
                 <button className="tb" onClick={() => closeStack(selParent.id)}>
                   Stack done <kbd>S</kbd>
+                </button>
+              )}
+              {canHaveNotes(selNode.type) && (
+                <button className="tb" onClick={() => openNotes(selNode.id)}>
+                  {selNode.notes ? 'Notes ✎' : 'Notes'} <kbd>N</kbd>
+                </button>
+              )}
+              {canSchedule(selNode.type) && (
+                <button className="tb" aria-pressed={!!selNode.high} onClick={() => toggleHigh(selNode.id)}>
+                  High priority <kbd>H</kbd>
+                </button>
+              )}
+              {canSchedule(selNode.type) && (
+                <button className="tb" onClick={() => setDuePicker(selNode.id)}>
+                  {selNode.due ? `Due ${formatDue(selNode.due, today)}` : 'Deadline'} <kbd>D</kbd>
+                </button>
+              )}
+              {selNode.type !== 'root' && (
+                <button className={'tb' + (selNode.flags ? ' asked' : '')} onClick={() => openFlagMenu(selNode.id)}>
+                  {selNode.flags ? `Bring up (${Object.keys(selNode.flags).length})` : 'Bring up…'} <kbd>Q</kbd>
                 </button>
               )}
               {selNode.type !== 'root' && (
@@ -949,6 +1316,13 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
           <p>Nothing here yet. Start with a project, then fill it with todos, notes, or more projects.</p>
           <button className="tb primary" onClick={() => addChild('root', 'project')}>
             Add a project
+          </button>
+        </div>
+      ) : filter && filter.matches === 0 ? (
+        <div className="empty">
+          <p>Nothing matches this filter right now.</p>
+          <button className="tb primary" onClick={() => setFilters(NO_FILTERS)}>
+            Clear filters
           </button>
         </div>
       ) : !rootOpenKids.length && !doc.root.collapsed ? (

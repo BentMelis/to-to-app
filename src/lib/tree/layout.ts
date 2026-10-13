@@ -1,4 +1,5 @@
 import { isComplete, type TreeIndex } from './model';
+import { daysUntil, dueLevel } from './dates';
 import type { TreeNode } from './types';
 
 export const HGAP = 76;
@@ -15,6 +16,72 @@ export interface ViewOptions {
   hideDone: boolean;
   /** Parents whose finished children are shown individually instead of as a stack. */
   openStacks: Set<string>;
+  /** Finished items the user unfolded to look inside (finished items start folded). */
+  openDone?: Set<string>;
+  /** When set, only these items are shown (see `applyFilters`). */
+  filter?: FilterResult | null;
+}
+
+/* ---------- Filters ---------- */
+
+export interface Filters {
+  /** Open items marked high priority. */
+  high: boolean;
+  /** Open items whose deadline is orange or red (3 days or fewer left, or overdue). */
+  dueSoon: boolean;
+}
+export const NO_FILTERS: Filters = { high: false, dueSoon: false };
+export const anyFilter = (f: Filters) => f.high || f.dueSoon;
+
+export interface FilterResult {
+  /** Everything that stays visible: matches, the path above them, and what's inside them. */
+  show: Set<string>;
+  /** Items above a match: shown as context and kept open even if folded. */
+  context: Set<string>;
+  matches: number;
+}
+
+/** True when an unfinished item matches any of the active filters. */
+export function matchesFilters(n: TreeNode, idx: TreeIndex, f: Filters, today: string) {
+  if (n.type === 'root' || n.type === 'note' || isComplete(idx, n)) return false;
+  if (f.high && n.high) return true;
+  if (f.dueSoon && n.due && dueLevel(daysUntil(n.due, today)) !== 'later') return true;
+  return false;
+}
+
+export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: string): FilterResult | null {
+  if (!anyFilter(f)) return null;
+  const show = new Set<string>(['root']);
+  const context = new Set<string>(['root']);
+  let matches = 0;
+  const addAll = (n: TreeNode) => {
+    show.add(n.id);
+    n.children.forEach(addAll);
+  };
+  const walk = (n: TreeNode) => {
+    if (matchesFilters(n, idx, f, today)) {
+      matches++;
+      addAll(n);
+      for (let p = idx.parentOf.get(n.id); p; p = idx.parentOf.get(p.id) ?? null) {
+        show.add(p.id);
+        context.add(p.id);
+      }
+    }
+    n.children.forEach(walk);
+  };
+  walk(root);
+  return { show, context, matches };
+}
+
+/**
+ * Whether an item's children are hidden: folded by the user, or finished and not opened.
+ * A finished item always has to be openable, otherwise ticking the last todo of a project
+ * would lock its contents away.
+ */
+export function isFolded(n: TreeNode, idx: TreeIndex, opts: Pick<ViewOptions, 'openDone'>) {
+  if (!n.children.length) return false;
+  if (n.collapsed) return true;
+  return n.id !== 'root' && isComplete(idx, n) && !opts.openDone?.has(n.id);
 }
 
 export const stackId = (parentId: string) => `stack:${parentId}`;
@@ -22,10 +89,13 @@ export const isStackId = (id: string | null | undefined): id is string => !!id &
 
 /** Children in display order: open items keep their order, finished ones sink to the bottom. */
 export function displayChildren(n: TreeNode, idx: TreeIndex, opts: ViewOptions, depth: number): VisItem[] {
-  if (n.collapsed) return [];
+  if (n.collapsed && !opts.filter?.context.has(n.id)) return [];
   const open: TreeNode[] = [];
   const done: TreeNode[] = [];
-  for (const c of n.children) (isComplete(idx, c) ? done : open).push(c);
+  for (const c of n.children) {
+    if (opts.filter && !opts.filter.show.has(c.id)) continue;
+    (isComplete(idx, c) ? done : open).push(c);
+  }
   const items: VisItem[] = open.map((c) => ({ kind: 'node', id: c.id, node: c, depth, parentId: n.id }));
   if (opts.hideDone || !done.length) return items;
   if (done.length >= STACK_MIN && !opts.openStacks.has(n.id)) {
@@ -47,8 +117,10 @@ export function visibleTree(root: TreeNode, idx: TreeIndex, opts: ViewOptions): 
   const walk = (it: VisItem) => {
     items.push(it);
     if (it.kind !== 'node') return;
-    // Finished items keep their children folded away; expanding the stack shows the items, not their insides.
-    const ks = it.node.id !== 'root' && isComplete(idx, it.node) ? [] : displayChildren(it.node, idx, opts, it.depth + 1);
+    // Finished items start folded; their fold button opens them like any other branch.
+    // A filter keeps the path to its matches open, even through folded branches.
+    const folded = !opts.filter?.context.has(it.id) && isFolded(it.node, idx, opts);
+    const ks = folded ? [] : displayChildren(it.node, idx, opts, it.depth + 1);
     kids.set(it.id, ks);
     ks.forEach(walk);
   };

@@ -1,4 +1,19 @@
-import { DOC_VERSION, TYPES, type ChildType, type NodeType, type Stats, type TreeDoc, type TreeNode } from './types';
+import { DUE_RE, dueLevel, daysUntil, type DueLevel } from './dates';
+import {
+  DOC_VERSION,
+  MAX_MEETINGS,
+  MEETING_COLORS,
+  TYPES,
+  canSchedule,
+  type ChildType,
+  type FlagKind,
+  type Meeting,
+  type MeetingColor,
+  type NodeType,
+  type Stats,
+  type TreeDoc,
+  type TreeNode,
+} from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -11,9 +26,12 @@ export const mk = (type: ChildType, title: string, children: TreeNode[] = [], do
   children,
 });
 
+export const defaultMeetings = (): Meeting[] => [{ id: 'standup', name: 'Standup', color: 'amber' }];
+
 export function starter(): TreeDoc {
   return {
     v: DOC_VERSION,
+    meetings: defaultMeetings(),
     root: {
       id: 'root',
       type: 'root',
@@ -35,6 +53,40 @@ export function starter(): TreeDoc {
   };
 }
 
+function readFlags(n: Record<string, unknown>): { flags?: Record<string, FlagKind> } {
+  const flags: Record<string, FlagKind> = {};
+  if (n.flags && typeof n.flags === 'object') {
+    for (const [k, v] of Object.entries(n.flags as Record<string, unknown>)) if (v === 'ask' || v === 'mention') flags[k] = v;
+  }
+  // v2 had a single "open question for standup" flag.
+  if (n.question === true && !flags.standup) flags.standup = 'ask';
+  return Object.keys(flags).length ? { flags } : {};
+}
+
+function readMeetings(raw: unknown): Meeting[] {
+  if (!Array.isArray(raw)) return defaultMeetings();
+  const seen = new Set<string>();
+  const out: Meeting[] = [];
+  for (const m of raw) {
+    if (!m || typeof m !== 'object') continue;
+    const id = String((m as Meeting).id || '');
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const color = MEETING_COLORS.includes((m as Meeting).color) ? (m as Meeting).color : MEETING_COLORS[out.length % MEETING_COLORS.length];
+    out.push({ id, name: String((m as Meeting).name || 'Meeting').slice(0, 40), color });
+  }
+  return out.slice(0, MAX_MEETINGS);
+}
+
+/** Drop flags that point at meetings that no longer exist. */
+function pruneFlags(n: TreeNode, ids: Set<string>) {
+  if (n.flags) {
+    for (const k of Object.keys(n.flags)) if (!ids.has(k)) delete n.flags[k];
+    if (!Object.keys(n.flags).length) delete n.flags;
+  }
+  n.children.forEach((c) => pruneFlags(c, ids));
+}
+
 /** Repairs anything malformed and infers types for trees saved by older versions. */
 function normalize(raw: unknown, depth: number): TreeNode {
   const n = (raw && typeof raw === 'object' ? raw : {}) as Partial<TreeNode> & Record<string, unknown>;
@@ -51,6 +103,11 @@ function normalize(raw: unknown, depth: number): TreeNode {
     title: String(n.title ?? ''),
     done: !!n.done,
     collapsed: !!n.collapsed,
+    ...(depth > 0 ? readFlags(n) : {}),
+    ...(n.high && canSchedule(type) ? { high: true } : {}),
+    ...(typeof n.due === 'string' && DUE_RE.test(n.due) && canSchedule(type) ? { due: n.due } : {}),
+    // Kept even if the type changes, so turning a project into a note and back loses nothing.
+    ...(typeof n.notes === 'string' && n.notes.trim() && depth > 0 ? { notes: n.notes } : {}),
     children,
   };
 }
@@ -59,7 +116,10 @@ export function parseDoc(input: unknown): TreeDoc | null {
   try {
     const s = typeof input === 'string' ? JSON.parse(input) : input;
     if (s && typeof s === 'object' && 'root' in s && s.root) {
-      return { v: DOC_VERSION, root: normalize((s as { root: unknown }).root, 0) };
+      const root = normalize((s as { root: unknown }).root, 0);
+      const meetings = readMeetings((s as { meetings?: unknown }).meetings);
+      pruneFlags(root, new Set(meetings.map((m) => m.id)));
+      return { v: DOC_VERSION, root, meetings };
     }
   } catch {
     /* fall through */
@@ -230,6 +290,10 @@ export function changeType(doc: TreeDoc, id: string, type: ChildType) {
   if (!n || n.type === 'root' || n.type === type || blockReason(idx, n, type)) return null;
   n.type = type;
   if (type !== 'todo') n.done = false;
+  if (!canSchedule(type)) {
+    delete n.high;
+    delete n.due;
+  }
   return { doc: d };
 }
 
@@ -296,4 +360,167 @@ export function moveTo(doc: TreeDoc, id: string, parentId: string, beforeId: str
   newP.collapsed = false;
   if (JSON.stringify(d) === JSON.stringify(doc)) return null;
   return { doc: d };
+}
+
+/* ---------- Meeting flags ---------- */
+
+/** Flag an item for a meeting (`ask` or `mention`), or clear it with `null`. */
+export function setFlag(doc: TreeDoc, id: string, meetingId: string, kind: FlagKind | null) {
+  const { doc: d, idx } = draft(doc);
+  const n = idx.byId.get(id);
+  if (!n || n.type === 'root' || !d.meetings.some((m) => m.id === meetingId)) return null;
+  if ((n.flags?.[meetingId] ?? null) === kind) return null;
+  if (kind) n.flags = { ...n.flags, [meetingId]: kind };
+  else if (n.flags) {
+    delete n.flags[meetingId];
+    if (!Object.keys(n.flags).length) delete n.flags;
+  }
+  return { doc: d };
+}
+
+export function addMeeting(doc: TreeDoc, name: string, color?: MeetingColor) {
+  if (doc.meetings.length >= MAX_MEETINGS || !name.trim()) return null;
+  const d = structuredClone(doc);
+  const used = new Set(d.meetings.map((m) => m.color));
+  const m: Meeting = {
+    id: uid(),
+    name: name.trim().slice(0, 40),
+    color: color ?? MEETING_COLORS.find((c) => !used.has(c)) ?? MEETING_COLORS[d.meetings.length % MEETING_COLORS.length],
+  };
+  d.meetings.push(m);
+  return { doc: d, id: m.id };
+}
+
+export function updateMeeting(doc: TreeDoc, meetingId: string, patch: Partial<Pick<Meeting, 'name' | 'color'>>) {
+  const d = structuredClone(doc);
+  const m = d.meetings.find((x) => x.id === meetingId);
+  if (!m) return null;
+  const name = patch.name !== undefined ? patch.name.trim().slice(0, 40) : m.name;
+  const color = patch.color ?? m.color;
+  if (!name || (name === m.name && color === m.color)) return null;
+  m.name = name;
+  m.color = color;
+  return { doc: d };
+}
+
+/** Remove a meeting and every flag pointing at it. */
+export function removeMeeting(doc: TreeDoc, meetingId: string) {
+  if (!doc.meetings.some((m) => m.id === meetingId)) return null;
+  const d = structuredClone(doc);
+  d.meetings = d.meetings.filter((m) => m.id !== meetingId);
+  pruneFlags(d.root, new Set(d.meetings.map((m) => m.id)));
+  return { doc: d };
+}
+
+export interface FlaggedItem {
+  id: string;
+  title: string;
+  type: TreeNode['type'];
+  /** Titles of the projects/todos above it, top level first (root excluded). */
+  path: string[];
+  done: boolean;
+  kind: FlagKind;
+}
+
+/** Everything flagged for a meeting, in tree order. */
+export function collectFlags(root: TreeNode, idx: TreeIndex, meetingId: string): FlaggedItem[] {
+  const out: FlaggedItem[] = [];
+  const walk = (n: TreeNode, path: string[]) => {
+    const kind = n.flags?.[meetingId];
+    if (kind && n.type !== 'root') out.push({ id: n.id, title: n.title, type: n.type, path, done: isComplete(idx, n), kind });
+    const next = n.type === 'root' ? path : [...path, n.title || 'Untitled'];
+    n.children.forEach((c) => walk(c, next));
+  };
+  walk(root, []);
+  return out;
+}
+
+/** Number of items flagged for any meeting. */
+export const countFlagged = (root: TreeNode): number =>
+  (root.flags && Object.keys(root.flags).length ? 1 : 0) + root.children.reduce((a, c) => a + countFlagged(c), 0);
+
+/** Plain-text agenda for one meeting, ready to paste into a chat. */
+export function meetingAsText(meeting: Meeting, items: FlaggedItem[], date = new Date()) {
+  const day = date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  const line = (q: FlaggedItem) => `• ${q.path.length ? q.path.join(' › ') + ': ' : ''}${q.title || 'Untitled'}${q.done ? ' (done ✓)' : ''}`;
+  const asks = items.filter((i) => i.kind === 'ask');
+  const mentions = items.filter((i) => i.kind === 'mention');
+  const out = [`${meeting.name} (${day})`];
+  if (asks.length) out.push('', 'Questions', ...asks.map(line));
+  if (mentions.length) out.push('', 'Updates', ...mentions.map(line));
+  return out.join('\n');
+}
+
+/** Unfold every collapsed ancestor so `id` can be seen. Returns null when nothing needed unfolding. */
+export function unfoldTo(doc: TreeDoc, id: string) {
+  const { doc: d, idx } = draft(doc);
+  let p = idx.parentOf.get(id) ?? null;
+  let changed = false;
+  while (p) {
+    if (p.collapsed) {
+      p.collapsed = false;
+      changed = true;
+    }
+    p = idx.parentOf.get(p.id) ?? null;
+  }
+  return changed ? { doc: d } : null;
+}
+
+/* ---------- Priority & deadlines ---------- */
+
+export function toggleHigh(doc: TreeDoc, id: string) {
+  const { doc: d, idx } = draft(doc);
+  const n = idx.byId.get(id);
+  if (!n || !canSchedule(n.type)) return null;
+  if (n.high) delete n.high;
+  else n.high = true;
+  return { doc: d, high: !!n.high };
+}
+
+/** Set or clear (`null`) a deadline. */
+export function setDue(doc: TreeDoc, id: string, due: string | null) {
+  const { doc: d, idx } = draft(doc);
+  const n = idx.byId.get(id);
+  if (!n || !canSchedule(n.type)) return null;
+  if (due !== null && !DUE_RE.test(due)) return null;
+  if ((n.due ?? null) === due) return null;
+  if (due) n.due = due;
+  else delete n.due;
+  return { doc: d };
+}
+
+const RANK: Record<DueLevel, number> = { later: 0, soon: 1, urgent: 2 };
+
+/** The most pressing deadline among unfinished items below `n` (for hints on folded branches). */
+export function worstDueBelow(n: TreeNode, idx: TreeIndex, today: string): DueLevel | null {
+  let worst: DueLevel | null = null;
+  const walk = (c: TreeNode) => {
+    if (c.due && !isComplete(idx, c)) {
+      const lvl = dueLevel(daysUntil(c.due, today));
+      if (!worst || RANK[lvl] > RANK[worst]) worst = lvl;
+    }
+    c.children.forEach(walk);
+  };
+  n.children.forEach(walk);
+  return worst;
+}
+
+/* ---------- Notes panel ---------- */
+
+export function setNotes(doc: TreeDoc, id: string, notes: string) {
+  const { doc: d, idx } = draft(doc);
+  const n = idx.byId.get(id);
+  if (!n || n.type === 'root') return null;
+  const v = notes.replace(/\s+$/, '');
+  if ((n.notes ?? '') === v) return null;
+  if (v) n.notes = v;
+  else delete n.notes;
+  return { doc: d };
+}
+
+/** Titles from the top level down to (not including) `id`. */
+export function pathTo(idx: TreeIndex, id: string) {
+  const out: string[] = [];
+  for (let p = idx.parentOf.get(id); p && p.type !== 'root'; p = idx.parentOf.get(p.id) ?? null) out.unshift(p.title || 'Untitled');
+  return out;
 }
