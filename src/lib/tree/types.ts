@@ -14,7 +14,7 @@ export interface TreeNode {
   high?: boolean;
   /** Deadline as a local calendar date, "YYYY-MM-DD" (todos and projects). */
   due?: string;
-  /** Free-form notes shown in the side panel (projects and todos). */
+  /** Rich notes for projects and todos, as Markdown (GFM). */
   notes?: string;
   /** Last time this item itself changed (ms since epoch). Set automatically; see activity.ts. */
   touched?: number;
@@ -61,7 +61,8 @@ export const TYPES: Record<NodeType, { label: string; allows: ChildType[] }> = {
 
 export const TYPE_KEYS: Record<string, ChildType> = { p: 'project', t: 'todo', n: 'note' };
 
-export const DOC_VERSION = 3;
+/** 4: notes are Markdown (were plain text). */
+export const DOC_VERSION = 4;
 
 /** Only things that can be finished can have a priority or a deadline. */
 export const canSchedule = (t: NodeType) => t === 'todo' || t === 'project';

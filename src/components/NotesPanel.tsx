@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { TYPES, type TreeNode } from '@/lib/tree/types';
+
+// The editor is only loaded when notes are opened, so it doesn't slow down starting the app.
+const RichNotes = dynamic(() => import('./RichNotes'), { ssr: false, loading: () => <div className="notes-rich notes-loading" aria-busy="true" /> });
 
 interface Props {
   /** The project or todo whose notes are being written. */
@@ -14,10 +18,8 @@ interface Props {
   onClose: () => void;
 }
 
-/** Centred dialog with free-form notes for a project or todo. Saves as you type. */
+/** Centred dialog with rich notes (stored as Markdown) for a project or todo. Saves as you type. */
 export function NotesPanel({ node, path, onChange, onSessionEnd, onClose }: Props) {
-  const [value, setValue] = useState(node.notes ?? '');
-  const ref = useRef<HTMLTextAreaElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pending = useRef<string | null>(null);
 
@@ -34,10 +36,6 @@ export function NotesPanel({ node, path, onChange, onSessionEnd, onClose }: Prop
   };
 
   useEffect(() => {
-    const t = ref.current;
-    if (!t) return;
-    t.focus({ preventScroll: true });
-    t.setSelectionRange(t.value.length, t.value.length);
     // Save anything still pending if the dialog is torn down some other way.
     return () => {
       flush();
@@ -45,14 +43,6 @@ export function NotesPanel({ node, path, onChange, onSessionEnd, onClose }: Prop
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // Grow with the text, up to most of the screen.
-  useLayoutEffect(() => {
-    const t = ref.current;
-    if (!t) return;
-    t.style.height = 'auto';
-    t.style.height = `${Math.min(t.scrollHeight + 2, window.innerHeight * 0.6)}px`;
-  }, [value]);
 
   return (
     <div
@@ -87,22 +77,17 @@ export function NotesPanel({ node, path, onChange, onSessionEnd, onClose }: Prop
             ×
           </button>
         </div>
-        <textarea
-          ref={ref}
-          className="notes-text"
-          value={value}
+        <RichNotes
+          value={node.notes ?? ''}
           placeholder={`Notes for this ${TYPES[node.type].label.toLowerCase()}: context, links, decisions, who to ask…`}
-          aria-label={`Notes for ${node.title || 'Untitled'}`}
-          spellCheck
-          onChange={(e) => {
-            setValue(e.target.value);
-            pending.current = e.target.value;
+          label={`Notes for ${node.title || 'Untitled'}`}
+          onChange={(md) => {
+            pending.current = md;
             if (timer.current) clearTimeout(timer.current);
             timer.current = setTimeout(flush, 400);
           }}
         />
         <div className="notes-foot">
-          <span className="panel-hint">Saved as you type · Esc or ⌘/Ctrl+Enter to close</span>
           <div className="spacer" />
           <button className="tb primary" onClick={close}>
             Done

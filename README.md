@@ -47,7 +47,11 @@ npm run dev        # http://localhost:3000
   border and a quiet `Nd idle` tag. Only the topmost idle item of a branch is tagged, a collapsed branch hiding one gets a
   dashed fold button, and **Filter → Idle** shows just those. Trees from before this feature start fresh from the day they're opened.
 - **Notes on projects and todos** — press `N`, click *Notes* in the action bar, or the page icon next to an item to
-  open a centred notes dialog for longer context (links, decisions, who to ask). It saves as you type (one undo step
+  open a centred notes dialog for longer context (links, decisions, who to ask). Notes are **rich text** (Tiptap):
+  bold/italic/strikethrough, headings, bullet and numbered lists, checklists, quotes, inline code and code blocks, links
+  (`Ctrl/⌘+K`; `Ctrl/⌘+click` opens) and tables, from a formatting bar or Markdown-style typing. They're stored as
+  Markdown (GFM) in the tree; plain-text notes from before are converted on first load (document v4) and look the same.
+  The editor is loaded only when notes are opened. It saves as you type (one undo step
   per editing session); Esc, ⌘/Ctrl+Enter, *Done* or clicking outside closes it. Items with notes show a filled page icon.
 - **Several trees** — keep work, personal and side projects apart. The tree name in the top-left corner (or `W`, then
   `1`–`9`) switches trees; the same menu creates them and has *Rename, reorder, delete…* (up to 10; the last one can't be
@@ -72,11 +76,13 @@ src/
     DuePicker.tsx       Set / change / remove a deadline
     FilterMenu.tsx      High priority / due soon / idle filters + idle threshold
     NotesPanel.tsx      Centred notes dialog for a project or todo
+    RichNotes.tsx       The rich text editor inside it (Tiptap, Markdown in/out, formatting bar)
     Toolbar.tsx, TypePicker.tsx, HelpPanel.tsx, icons.tsx, ServiceWorker.tsx
   lib/
     tree/types.ts       Node types and which types may contain which
     tree/trees.ts       The list of trees: add, rename, reorder, remove/restore (pure)
     tree/model.ts       Pure, immutable tree operations (add, move, moveTo, indent, toggle…) + stats
+    tree/notesText.ts   Notes as Markdown: migrating plain text, escaping, plain-text previews
     tree/activity.ts    Activity stamps (diffed centrally in the store) and idle detection
     tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout

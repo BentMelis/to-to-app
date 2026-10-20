@@ -7,6 +7,7 @@ import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
 import type { Meeting } from '@/lib/tree/types';
 import { FlagBadge, flagLabel } from './FlagBadge';
+import { notesPreview } from '@/lib/tree/notesText';
 import { IconCalendar, IconCheck, IconIdle, IconNotes, IconPlus } from './icons';
 import { describeIdle } from '@/lib/tree/activity';
 
@@ -191,7 +192,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
             tabIndex={-1}
             data-act="notes"
             aria-label={(n.notes ? 'Read notes: ' : 'Add notes: ') + name}
-            title={n.notes ? n.notes.slice(0, 140) + (n.notes.length > 140 ? '…' : '') : 'Add notes'}
+            title={n.notes ? notesPreview(n.notes) : 'Add notes'}
           >
             <IconNotes />
           </button>

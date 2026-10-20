@@ -14,6 +14,7 @@ import {
   type TreeDoc,
   type TreeNode,
 } from './types';
+import { legacyNotesToMarkdown } from './notesText';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -90,9 +91,9 @@ function pruneFlags(n: TreeNode, ids: Set<string>) {
 }
 
 /** Repairs anything malformed and infers types for trees saved by older versions. */
-function normalize(raw: unknown, depth: number): TreeNode {
+function normalize(raw: unknown, depth: number, plainNotes = false): TreeNode {
   const n = (raw && typeof raw === 'object' ? raw : {}) as Partial<TreeNode> & Record<string, unknown>;
-  const children = Array.isArray(n.children) ? n.children.map((c) => normalize(c, depth + 1)) : [];
+  const children = Array.isArray(n.children) ? n.children.map((c) => normalize(c, depth + 1, plainNotes)) : [];
   let type = n.type as NodeType | undefined;
   if (!type || !(type in TYPES) || (type === 'root' && depth > 0)) {
     type = depth === 0 ? 'root' : children.length || depth === 1 ? 'project' : 'todo';
@@ -109,7 +110,8 @@ function normalize(raw: unknown, depth: number): TreeNode {
     ...(n.high && canSchedule(type) ? { high: true } : {}),
     ...(typeof n.due === 'string' && DUE_RE.test(n.due) && canSchedule(type) ? { due: n.due } : {}),
     // Kept even if the type changes, so turning a project into a note and back loses nothing.
-    ...(typeof n.notes === 'string' && n.notes.trim() && depth > 0 ? { notes: n.notes } : {}),
+    // Before v4, notes were plain text; now they're Markdown.
+    ...(typeof n.notes === 'string' && n.notes.trim() && depth > 0 ? { notes: plainNotes ? legacyNotesToMarkdown(n.notes) : n.notes } : {}),
     // Items from before activity tracking start their clock now, so nothing is instantly "idle".
     ...(depth > 0 ? { touched: typeof n.touched === 'number' && isFinite(n.touched) ? n.touched : Date.now() } : {}),
     children,
@@ -120,7 +122,8 @@ export function parseDoc(input: unknown): TreeDoc | null {
   try {
     const s = typeof input === 'string' ? JSON.parse(input) : input;
     if (s && typeof s === 'object' && 'root' in s && s.root) {
-      const root = normalize((s as { root: unknown }).root, 0);
+      const v = (s as { v?: unknown }).v;
+      const root = normalize((s as { root: unknown }).root, 0, !(typeof v === 'number' && v >= 4));
       const meetings = readMeetings((s as { meetings?: unknown }).meetings);
       pruneFlags(root, new Set(meetings.map((m) => m.id)));
       const raw = (s as { settings?: { idleDays?: unknown } }).settings;

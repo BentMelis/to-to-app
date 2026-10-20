@@ -1083,10 +1083,12 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
   const rootOpenKids = vis.kids.get('root') || [];
   // The top of the tree always shows the tree's name; renaming it renames the tree.
   const rootNode = doc.root.title === treeName ? doc.root : { ...doc.root, title: treeName };
+  // With an empty state on screen the lone root would sit right behind its message, so it's hidden.
+  const emptyState = !doc.root.children.length ? 'new' : filter && filter.matches === 0 ? 'filter' : !rootOpenKids.length && !doc.root.collapsed ? 'done' : null;
 
   return (
     <>
-      <div id="vp" ref={vpRef} tabIndex={0} role="tree" aria-label="Todo tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
+      <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Todo tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('.node');
         const id = el?.dataset.id;
         if (id && !isStackId(id) && !(e.target as HTMLElement).closest('button')) setEditing({ id, isNew: false });
@@ -1355,22 +1357,25 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
         </div>
       )}
 
-      {!doc.root.children.length ? (
+      {emptyState === 'new' ? (
         <div className="empty">
+          <h2>{treeName}</h2>
           <p>Nothing here yet. Start with a project, then fill it with todos, notes, or more projects.</p>
           <button className="tb primary" onClick={() => addChild('root', 'project')}>
             Add a project
           </button>
         </div>
-      ) : filter && filter.matches === 0 ? (
+      ) : emptyState === 'filter' ? (
         <div className="empty">
+          <h2>{treeName}</h2>
           <p>Nothing matches this filter right now.</p>
           <button className="tb primary" onClick={() => setFilters(NO_FILTERS)}>
             Clear filters
           </button>
         </div>
-      ) : !rootOpenKids.length && !doc.root.collapsed ? (
+      ) : emptyState === 'done' ? (
         <div className="empty">
+          <h2>{treeName}</h2>
           <p>Every item is done and hidden.</p>
           <button className="tb primary" onClick={() => setHideDone(false)}>
             Show done items
