@@ -388,3 +388,44 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 
 .m-dots { display: inline-flex; gap: 3px; }
 .tb .m-count { color: var(--surface); }
+
+/* Idle heads-up: quiet on purpose — a nudge, not an alarm */
+.idle-chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px 1px 5px; border-radius: 10px;
+  border: 1px dashed var(--muted); color: var(--muted); font-size: 12px; white-space: nowrap; line-height: 1.4; }
+.idle-chip svg { width: 12px; height: 12px; flex: none; }
+.node.idle:not(.selected) { border-style: dashed; border-color: color-mix(in srgb, var(--muted) 70%, var(--edge)); }
+.fold.has-idle { border-style: dashed; border-color: var(--muted); }
+.idle-mark { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; border: 1px dashed var(--muted); color: var(--muted); }
+.idle-mark svg { width: 12px; height: 12px; }
+.idle-setting { display: flex; align-items: center; gap: 8px; margin: 10px 8px 0; padding-top: 10px; border-top: 1px solid var(--edge);
+  font-size: 13px; color: var(--muted); }
+.idle-setting svg { width: 14px; height: 14px; flex: none; }
+.idle-setting span { flex: 1; }
+.idle-setting select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--edge); border-radius: 6px; padding: 3px 6px; }
+.help .idle-chip { vertical-align: 1px; }
+
+/* ---------- Trees: switcher + menu ---------- */
+.tree-switch { gap: 6px; max-width: 220px; font-weight: 700; }
+.tree-switch .tree-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-head); }
+.tree-switch svg { color: var(--muted); }
+.tree-menu { width: 300px; }
+.tree-pick { grid-template-columns: 22px 1fr auto; }
+.tree-pick b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.tree-pick.current b { font-weight: 700; }
+.tree-pick.current b::after { content: none; }
+.tree-check { display: grid; place-items: center; color: var(--leaf); }
+.tree-check svg { width: 15px; height: 15px; }
+.tree-new { display: flex; align-items: center; gap: 6px; margin: 6px 4px 0; padding-top: 8px; border-top: 1px solid var(--edge); }
+.tree-new > svg { width: 14px; height: 14px; color: var(--muted); flex: none; margin-left: 4px; }
+.tree-new input, .tree-row input { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--paper);
+  border: 1.5px solid var(--edge); border-radius: 7px; padding: 6px 8px; }
+.tree-new input:focus-visible, .tree-row input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.tree-rows { list-style: none; margin: 4px 4px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tree-row { display: flex; align-items: center; gap: 2px; }
+.tree-row input { margin-right: 4px; }
+.tree-confirm { padding: 4px 8px 0; }
+.tree-confirm p { margin: 0 0 6px; font-size: 14.5px; line-height: 1.4; }
+.tree-confirm .filter-note { margin: 0; }
+.tb.danger-solid { background: var(--danger); color: #fff; }
+.tb.danger-solid:hover { background: var(--danger); opacity: .9; }
+@media (max-width: 640px) { .tree-switch { max-width: 140px; } }

@@ -1,5 +1,5 @@
-import TodoTree from '@/components/TodoTree';
+import TreesApp from '@/components/TreesApp';
 
 export default function Home() {
-  return <TodoTree />;
+  return <TreesApp />;
 }

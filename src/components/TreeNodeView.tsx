@@ -7,7 +7,8 @@ import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
 import type { Meeting } from '@/lib/tree/types';
 import { FlagBadge, flagLabel } from './FlagBadge';
-import { IconCalendar, IconCheck, IconNotes, IconPlus } from './icons';
+import { IconCalendar, IconCheck, IconIdle, IconNotes, IconPlus } from './icons';
+import { describeIdle } from '@/lib/tree/activity';
 
 /** The first meeting (in the user's order) that something inside `nodes` is flagged for, if any. */
 function firstFlagged(nodes: TreeNode[], meetings: Meeting[], deep: boolean): Meeting | null {
@@ -36,6 +37,12 @@ interface Props {
   editing: { isNew: boolean } | null;
   /** Children hidden: folded by the user, or finished and not opened. */
   folded: boolean;
+  /** Days without activity, when this is the topmost idle item of its branch. */
+  idleDays?: number;
+  /** Latest activity in this item's branch (ms). */
+  idleSince?: number;
+  /** Something below this item is idle (shown as a hint while folded). */
+  idleInside?: boolean;
   /** The user's meetings & people, in their order (for flag badges). */
   meetings: Meeting[];
   /** Today's date (YYYY-MM-DD); passed in so deadline colours update when the day changes. */
@@ -44,7 +51,7 @@ interface Props {
   onEditEnd: (id: string, e: EditEnd) => void;
 }
 
-function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, register, onEditEnd }: Props) {
+function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, idleDays, idleSince, idleInside, register, onEditEnd }: Props) {
   const type = n.type;
   const isRoot = type === 'root';
   const hasKids = n.children.length > 0;
@@ -53,7 +60,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
   const name = n.title || 'Untitled';
   const mixed = type === 'todo' && hasKids && !comp && s.done > 0;
   const showProgress = isRoot ? hasKids : type === 'project' || (type === 'todo' && s.total > 1);
-  const showMeta = showProgress || !!n.due;
+  const showMeta = showProgress || !!n.due || idleDays !== undefined;
   const due = n.due ? { label: formatDue(n.due, today), level: comp ? 'done' : dueLevel(daysUntil(n.due, today)), text: describeDue(n.due, today) } : null;
   const hiddenDue = folded ? worstDueBelow(n, idx, today) : null;
   const hiddenFlag = folded ? firstFlagged(n.children, meetings, true) : null;
@@ -73,6 +80,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
     context && 'context',
     flags.length > 0 && 'asking',
     n.high && 'high',
+    idleDays !== undefined && 'idle',
     n.notes && canHaveNotes(type) && 'has-notes',
     due && !comp && `due-${due.level}`,
   ]
@@ -93,6 +101,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
         name +
         (n.high ? ', high priority' : '') +
         (due ? ', ' + due.text : '') +
+        (idleDays !== undefined ? `, idle for ${idleDays} days` : '') +
         flags.map((f) => ', ' + flagLabel(f.kind, f.m).toLowerCase()).join('')
       }
       aria-expanded={hasKids ? !folded : undefined}
@@ -132,6 +141,12 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
         )}
         {showMeta && (
           <div className="meta">
+            {idleDays !== undefined && (
+              <span className="idle-chip" title={idleSince ? describeIdle(idleDays, idleSince) : undefined}>
+                <IconIdle />
+                {idleDays}d idle
+              </span>
+            )}
             {due && (
               <span className={`due-chip ${due.level}`} title={due.text}>
                 <IconCalendar />
@@ -156,7 +171,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
       <div className="handles">
         {hasKids && (
           <button
-            className={'fold' + (hiddenFlag ? ` has-ask m-${hiddenFlag.color}` : '') + (hiddenDue && hiddenDue !== 'later' ? ` has-due-${hiddenDue}` : '')}
+            className={'fold' + (folded && idleInside && !hiddenFlag ? ' has-idle' : '') + (hiddenFlag ? ` has-ask m-${hiddenFlag.color}` : '') + (hiddenDue && hiddenDue !== 'later' ? ` has-due-${hiddenDue}` : '')}
             tabIndex={-1}
             data-act="fold"
             title={hiddenDue === 'urgent' ? 'A deadline inside is due within a day' : hiddenDue === 'soon' ? 'A deadline inside is due within 3 days' : undefined}

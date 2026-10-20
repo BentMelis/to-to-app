@@ -1,7 +1,7 @@
 // Todo tree service worker: keeps the app working offline.
 // Pages: network first so updates arrive, cached copy when offline.
 // Static assets (/_next/static, icons, fonts): cache first — their URLs are content-hashed.
-const CACHE = 'todo-tree-v2';
+const CACHE = 'todo-tree-v3';
 const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/favicon-32.png'];
 
 self.addEventListener('install', (e) => {

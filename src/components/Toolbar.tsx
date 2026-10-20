@@ -3,7 +3,7 @@
 import { forwardRef } from 'react';
 import type { SaveStatus } from '@/lib/tree/useTreeStore';
 import { anyFilter, type Filters } from '@/lib/tree/layout';
-import { IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
+import { IconChevron, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: '',
@@ -13,6 +13,9 @@ const STATUS: Record<SaveStatus, string> = {
 };
 
 interface Props {
+  treeName: string;
+  treeMenuOpen: boolean;
+  onTreeMenu: () => void;
   hideDone: boolean;
   focusMode: boolean;
   canUndo: boolean;
@@ -48,6 +51,19 @@ const keepFocus = (e: React.PointerEvent) => {
 export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
   return (
     <header className="topbar" ref={ref} onPointerDown={keepFocus}>
+      <div className="group tree-group">
+        <button
+          className="tb tree-switch"
+          data-tree-button
+          aria-haspopup="dialog"
+          aria-expanded={p.treeMenuOpen}
+          title="Switch tree (W)"
+          onClick={p.onTreeMenu}
+        >
+          <span className="tree-name">{p.treeName}</span>
+          <IconChevron />
+        </button>
+      </div>
       <div className="group">
         <button className="tb primary" title="Add something to the top level" onClick={(e) => p.onAdd(e.currentTarget.getBoundingClientRect())}>
           <IconPlus w={2} />
@@ -69,7 +85,7 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
           onClick={(e) => p.onFilter(e.currentTarget.getBoundingClientRect())}
         >
           <IconFilter />
-          {!anyFilter(p.filters) ? 'Filter' : p.filters.high && p.filters.dueSoon ? 'Priority + due soon' : p.filters.high ? 'High priority' : 'Due soon'}
+          {filterLabel(p.filters)}
           {anyFilter(p.filters) && <span className="filter-count">{p.filterMatches}</span>}
         </button>
       </div>
@@ -118,10 +134,10 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         </button>
       </div>
       <div className="group">
-        <button className="tb icon" aria-label="Download a backup" title="Download a backup (.json)" onClick={p.onExport}>
+        <button className="tb icon" aria-label="Download a backup of this tree" title="Download a backup of this tree (.json)" onClick={p.onExport}>
           <IconDownload />
         </button>
-        <button className="tb icon" aria-label="Restore from a backup" title="Restore from a backup" onClick={p.onImport}>
+        <button className="tb icon" aria-label="Restore this tree from a backup" title="Restore this tree from a backup" onClick={p.onImport}>
           <IconUpload />
         </button>
         <button className="tb icon" aria-label="How it works and shortcuts" aria-expanded={p.helpOpen} onClick={p.onHelp}>
@@ -131,3 +147,9 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
     </header>
   );
 });
+
+function filterLabel(f: Filters) {
+  if (!anyFilter(f)) return 'Filter';
+  const on = [f.high && 'High priority', f.dueSoon && 'Due soon', f.idle && 'Idle'].filter(Boolean) as string[];
+  return on.length === 1 ? on[0] : on.length === 2 ? on.map((l) => l.split(' ')[0]).join(' + ') : '3 filters';
+}

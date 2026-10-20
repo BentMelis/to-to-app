@@ -41,10 +41,21 @@ npm run dev        # http://localhost:3000
 - **Filters** — the **Filter** menu shows only open *high-priority* items and/or items *due soon* (orange/red),
   plus the path above them (faded) and everything inside them. Filters combine as "any of", open folded branches
   that hide a match, and are remembered per browser.
+- **Idle heads-up** — every item remembers when it last changed (title, done, kind, flags, priority, deadline, notes,
+  what's inside it, or where it lives; folding doesn't count). An open todo or project with no activity anywhere in its
+  branch for N days (default 7; 3/7/14/30 or off, set in the **Filter** menu, stored in the document) gets a dashed
+  border and a quiet `Nd idle` tag. Only the topmost idle item of a branch is tagged, a collapsed branch hiding one gets a
+  dashed fold button, and **Filter → Idle** shows just those. Trees from before this feature start fresh from the day they're opened.
 - **Notes on projects and todos** — press `N`, click *Notes* in the action bar, or the page icon next to an item to
   open a centred notes dialog for longer context (links, decisions, who to ask). It saves as you type (one undo step
   per editing session); Esc, ⌘/Ctrl+Enter, *Done* or clicking outside closes it. Items with notes show a filled page icon.
-- Backup download / restore (.json), self-hosted fonts (works fully offline, nothing sent to Google).
+- **Several trees** — keep work, personal and side projects apart. The tree name in the top-left corner (or `W`, then
+  `1`–`9`) switches trees; the same menu creates them and has *Rename, reorder, delete…* (up to 10; the last one can't be
+  deleted). Each tree has its own projects, meetings, filters, idle threshold, undo history, camera position and fold
+  state, and the app reopens the last tree you used. Renaming the top of a tree renames the tree. Deleting asks for
+  confirmation with the number of items and can be undone for 10 seconds. Backups are per tree. Existing data becomes
+  the first tree automatically.
+- Backup download / restore (.json) of the open tree, self-hosted fonts (works fully offline, nothing sent to Google).
 
 ## Project layout
 
@@ -52,29 +63,42 @@ npm run dev        # http://localhost:3000
 src/
   app/                  Next.js routes: layout, page, PWA manifest, global styles
   components/
-    TodoTree.tsx        The canvas: state, camera (pan/zoom/focus), keyboard, drag & drop
+    TreesApp.tsx        The list of trees around the canvas: switching, creating, deleting (+ undo)
+    TreeMenu.tsx        Tree switcher menu and "Rename, reorder, delete…"
+    TodoTree.tsx        The canvas for one tree: state, camera (pan/zoom/focus), keyboard, drag & drop
     TreeNodeView.tsx    A single item + the finished-items stack card
     MeetingsPanel.tsx   Per meeting/person: to ask, to mention; manage meetings
     FlagMenu.tsx        "Bring up … at" menu (ask / mention per meeting)
     DuePicker.tsx       Set / change / remove a deadline
-    FilterMenu.tsx      High priority / due soon filters
+    FilterMenu.tsx      High priority / due soon / idle filters + idle threshold
     NotesPanel.tsx      Centred notes dialog for a project or todo
     Toolbar.tsx, TypePicker.tsx, HelpPanel.tsx, icons.tsx, ServiceWorker.tsx
   lib/
     tree/types.ts       Node types and which types may contain which
+    tree/trees.ts       The list of trees: add, rename, reorder, remove/restore (pure)
     tree/model.ts       Pure, immutable tree operations (add, move, moveTo, indent, toggle…) + stats
+    tree/activity.ts    Activity stamps (diffed centrally in the store) and idle detection
     tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout
     tree/useTreeStore.ts  Document + undo/redo + debounced persistence
-    storage/index.ts    StorageAdapter interface, localStorage adapter, import/export
+    storage/index.ts    Library (list + one document per tree), StorageAdapter, per-tree preferences, import/export
 public/sw.js            Offline service worker (production only)
 ```
 
 ## Data & storage
 
-Everything is stored in the browser (`localStorage`, key `todo-tree:v1` — the same key the POC used, so existing
-trees carry over when served from the same origin). Storage goes through the `StorageAdapter` interface in
-`src/lib/storage`, so a server-backed adapter (accounts + sync) can be added later without touching the UI.
+Everything is stored in the browser (`localStorage`):
+
+| Key | What |
+| --- | --- |
+| `todo-tree:trees` | The list of trees (id, name, order) and which one was open last |
+| `todo-tree:tree:<id>` | One tree: its root, meetings and settings (`TreeDoc`) |
+| `todo-tree:view:<id>`, `todo-tree:filters:<id>`, `todo-tree:meeting:<id>` | Per-tree viewing preferences (camera, filters, last meeting tab) |
+| `todo-tree:v1` | The single tree from before multiple trees (and the POC). Migrated into the first tree on first start and left untouched as a safety copy |
+
+Storage goes through the `Library` and `StorageAdapter` interfaces in `src/lib/storage`, so a server-backed version
+(accounts + sync, KAN-11) can be added later without touching the UI. It should keep the same shape: one document per
+tree, plus the small list.
 
 ## Deploying
 

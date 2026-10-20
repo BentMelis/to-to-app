@@ -62,3 +62,23 @@ export const IconMeetings = () => (
     <path d="M13.5 6.5v4a1 1 0 0 1-1 1h-.5v1.8L10 11.5H8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
+export const IconIdle = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M10.5 2.5a5.5 5.5 0 1 0 3 9.9A6 6 0 0 1 10.5 2.5z" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+  </svg>
+);
+export const IconChevron = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M4.5 6.5 8 10l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+export const IconArrowUp = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 13V3.5M4.5 7 8 3.5 11.5 7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+export const IconArrowDown = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M8 3v9.5M4.5 9 8 12.5 11.5 9" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);

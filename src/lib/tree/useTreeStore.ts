@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { StorageAdapter } from '@/lib/storage';
 import { starter } from './model';
+import { stampChanges } from './activity';
 import type { TreeDoc } from './types';
 
 const HISTORY = 100;
@@ -15,14 +16,22 @@ interface History {
 
 export type SaveStatus = 'loading' | 'saving' | 'saved' | 'error';
 
+/**
+ * Undo/redo history per tree for this session, so switching to another tree and back keeps it.
+ * Never shared between trees: undo only ever changes the tree you're looking at.
+ */
+const sessions = new Map<string, History>();
+export const forgetSession = (key: string) => sessions.delete(key);
+
 /** Tree document + undo/redo history + persistence through a storage adapter. */
-export function useTreeStore(adapter: StorageAdapter) {
-  const [h, setH] = useState<History | null>(null);
-  const [status, setStatus] = useState<SaveStatus>('loading');
+export function useTreeStore(adapter: StorageAdapter, key = 'default') {
+  const [h, setH] = useState<History | null>(() => sessions.get(key) ?? null);
+  const [status, setStatus] = useState<SaveStatus>(() => (sessions.has(key) ? 'saved' : 'loading'));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const loaded = useRef(false);
+  const loaded = useRef(sessions.has(key));
 
   useEffect(() => {
+    if (loaded.current) return;
     let alive = true;
     adapter.load().then((doc) => {
       if (!alive) return;
@@ -35,10 +44,17 @@ export function useTreeStore(adapter: StorageAdapter) {
     };
   }, [adapter]);
 
+  // Keep this tree's history for when the user comes back to it.
+  useEffect(() => {
+    if (h) sessions.set(key, h);
+  }, [h, key]);
+
   // Debounced save whenever the document changes.
   const doc = h?.doc;
+  const savedDoc = useRef<TreeDoc | null>(sessions.get(key)?.doc ?? null);
   useEffect(() => {
-    if (!doc || !loaded.current) return;
+    if (!doc || !loaded.current || doc === savedDoc.current) return;
+    savedDoc.current = doc;
     setStatus('saving');
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(() => {
@@ -50,12 +66,13 @@ export function useTreeStore(adapter: StorageAdapter) {
   }, [doc, adapter]);
 
   /** Apply a change as a new undo step. */
+  // Every change stamps the items it touched, which drives the idle heads-up (see activity.ts).
   const commit = useCallback((next: TreeDoc) => {
-    setH((s) => (s ? { doc: next, past: [...s.past.slice(-HISTORY + 1), s.doc], future: [] } : s));
+    setH((s) => (s ? { doc: stampChanges(s.doc, next), past: [...s.past.slice(-HISTORY + 1), s.doc], future: [] } : s));
   }, []);
   /** Replace the current doc without a new undo step (e.g. naming an item that was just added). */
   const replace = useCallback((next: TreeDoc) => {
-    setH((s) => (s ? { ...s, doc: next } : s));
+    setH((s) => (s ? { ...s, doc: stampChanges(s.doc, next) } : s));
   }, []);
   /** Throw away the latest step entirely (e.g. a new item that was left empty). */
   const revert = useCallback(() => {

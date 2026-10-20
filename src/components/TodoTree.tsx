@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { exportDoc, importDoc, localAdapter } from '@/lib/storage';
+import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
+import { idleItems, lastActivity } from '@/lib/tree/activity';
 import { FilterMenu } from './FilterMenu';
 import { NotesPanel } from './NotesPanel';
 import { branchBounds, isFolded, isStackId, layout, stackId, visibleTree, VGAP, type Box, type VisItem } from '@/lib/tree/layout';
@@ -30,13 +31,25 @@ interface DropTarget {
   zone: DropZone;
 }
 
-export default function TodoTree() {
-  const store = useTreeStore(localAdapter);
-  if (!store.doc) return <div className="boot" aria-busy="true" />;
-  return <TreeApp store={store} doc={store.doc} />;
+/** The tree that's open, and how it connects to the tree list around it (see TreesApp). */
+export interface TreeProps {
+  treeId: string;
+  treeName: string;
+  adapter: StorageAdapter;
+  treeMenuOpen: boolean;
+  /** Open the tree switcher, anchored on its toolbar button. */
+  onTreeMenu: () => void;
+  /** Renaming the top of the tree renames the tree. */
+  onRenameTree: (name: string) => void;
 }
 
-function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: TreeDoc }) {
+export default function TodoTree(props: TreeProps) {
+  const store = useTreeStore(props.adapter, props.treeId);
+  if (!store.doc) return <div className="boot" aria-busy="true" />;
+  return <TreeCanvas {...props} store={store} doc={store.doc} />;
+}
+
+function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, onRenameTree }: TreeProps & { store: ReturnType<typeof useTreeStore>; doc: TreeDoc }) {
   const [sel, setSelRaw] = useState<string | null>(null);
   const [editing, setEditing] = useState<{ id: string; isNew: boolean } | null>(null);
   const [hideDone, setHideDone] = useState(false);
@@ -48,8 +61,13 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   const [duePicker, setDuePicker] = useState<string | null>(null);
   // Deadline colours depend on the date, so re-check it now and then (and when the tab comes back).
   const [today, setToday] = useState(todayISO);
+  // Coarse clock (updated every minute) for idle checks.
+  const [clock, setClock] = useState(() => Date.now());
   useEffect(() => {
-    const tick = () => setToday(todayISO());
+    const tick = () => {
+      setToday(todayISO());
+      setClock(Date.now());
+    };
     const t = setInterval(tick, 60_000);
     document.addEventListener('visibilitychange', tick);
     return () => {
@@ -64,44 +82,38 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [manageMeetings, setManageMeetings] = useState(false);
   // Last meeting tab looked at (a viewing preference, remembered per browser).
-  const [activeMeeting, setActiveMeetingRaw] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('todo-tree:meeting');
-    } catch {
-      return null;
-    }
-  });
+  const [activeMeeting, setActiveMeetingRaw] = useState<string | null>(() => prefs.get<string>('meeting', treeId));
   const setActiveMeeting = (id: string) => {
     setActiveMeetingRaw(id);
-    try {
-      localStorage.setItem('todo-tree:meeting', id);
-    } catch {
-      /* not remembered */
-    }
+    prefs.set('meeting', treeId, id);
   };
   const help = panel === 'help';
   const [, setTick] = useState(0);
 
   const idx = useMemo(() => M.buildIndex(doc.root), [doc]);
   const flaggedCount = useMemo(() => M.countFlagged(doc.root), [doc]);
-  // Filters are remembered per browser (a viewing preference, not part of the tree).
-  const [filters, setFiltersRaw] = useState<Filters>(() => {
-    try {
-      return { ...NO_FILTERS, ...JSON.parse(localStorage.getItem('todo-tree:filters') || '{}') };
-    } catch {
-      return NO_FILTERS;
-    }
-  });
+  // Filters are remembered per tree, per browser (a viewing preference, not part of the tree).
+  const [filters, setFiltersRaw] = useState<Filters>(() => ({ ...NO_FILTERS, ...prefs.get<Filters>('filters', treeId) }));
   const [filterMenu, setFilterMenu] = useState<DOMRect | null>(null);
-  const filter = useMemo(() => applyFilters(doc.root, idx, filters, today), [doc, idx, filters, today]);
+  // Idle heads-up: re-evaluated whenever the tree changes, and every minute via `today`/`clock`.
+  const idleDays = M.idleDaysOf(doc);
+  const idle = useMemo(() => idleItems(doc.root, idx, idleDays, clock), [doc, idx, idleDays, clock]);
+  const activity = useMemo(() => lastActivity(doc.root), [doc]);
+  /** Items with an idle item somewhere below them (hint on folded branches). */
+  const idleAbove = useMemo(() => {
+    const out = new Set<string>();
+    for (const id of idle.keys()) for (let p = idx.parentOf.get(id); p; p = idx.parentOf.get(p.id) ?? null) out.add(p.id);
+    return out;
+  }, [idle, idx]);
+  const filter = useMemo(() => applyFilters(doc.root, idx, filters, today, idle), [doc, idx, filters, today, idle]);
   const filterCounts = useMemo(() => {
-    const c = { high: 0, dueSoon: 0 };
+    const c = { high: 0, dueSoon: 0, idle: idle.size };
     for (const n of idx.byId.values()) {
       if (matchesFilters(n, idx, { high: true, dueSoon: false }, today)) c.high++;
       if (matchesFilters(n, idx, { high: false, dueSoon: true }, today)) c.dueSoon++;
     }
     return c;
-  }, [idx, today]);
+  }, [idx, today, idle]);
   const vis = useMemo(
     () => visibleTree(doc.root, idx, { hideDone, openStacks, openDone, filter }),
     [doc, idx, hideDone, openStacks, openDone, filter],
@@ -300,23 +312,36 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     [idx],
   );
 
+  // Each tree remembers where you were looking. A tree opened for the first time is fitted on screen.
   useEffect(() => {
-    fit(false);
+    const saved = prefs.get<{ x: number; y: number; k: number }>('view', treeId);
+    const restore = () => {
+      if (saved && [saved.x, saved.y, saved.k].every(Number.isFinite)) {
+        view.current = { x: saved.x, y: saved.y, k: clamp(saved.k, MINK, MAXK) };
+        applyView();
+      } else fit(false);
+    };
+    restore();
     vpRef.current?.focus({ preventScroll: true });
     document.fonts?.ready.then(() => {
       setTick((t) => t + 1);
-      requestAnimationFrame(() => fit(false));
+      if (!saved) requestAnimationFrame(() => fit(false));
     });
+    const remember = () => {
+      const { x, y, k } = view.current;
+      prefs.set('view', treeId, { x: Math.round(x), y: Math.round(y), k: Math.round(k * 1000) / 1000 });
+    };
+    window.addEventListener('pagehide', remember);
+    return () => {
+      window.removeEventListener('pagehide', remember);
+      remember();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const setFilters = (f: Filters) => {
     setFiltersRaw(f);
-    try {
-      localStorage.setItem('todo-tree:filters', JSON.stringify(f));
-    } catch {
-      /* private mode etc.: the filter just isn't remembered */
-    }
+    prefs.set('filters', treeId, f);
     requestAnimationFrame(() => fit(true));
   };
 
@@ -379,6 +404,10 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     const n = idx.byId.get(id);
     if (!n) return;
     let base = doc;
+    if (id === 'root') {
+      if (e.commit && e.value && e.value !== treeName) onRenameTree(e.value);
+      return focusCanvas();
+    }
     if (e.commit && e.value) {
       if (e.value !== n.title) {
         base = M.rename(doc, id, e.value)!.doc;
@@ -911,7 +940,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         e.preventDefault();
         return openStack(id.slice(6));
       }
-      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'Escape', 'f', 'F', '?'].includes(key)) return;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'Escape', 'f', 'F', 'w', 'W', '?'].includes(key)) return;
     }
     switch (key) {
       case 'ArrowUp':
@@ -1016,6 +1045,11 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
       case '?':
         setPanel((p) => (p === 'help' ? null : 'help'));
         break;
+      case 'w':
+      case 'W':
+        e.preventDefault();
+        onTreeMenu();
+        break;
       case 'Escape':
         if (selId) setSel(null);
         break;
@@ -1039,7 +1073,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
     if (!d) return showToast('That file isn’t a Todo tree backup');
     store.commit(d);
     setSel(null);
-    showToast(`Restored “${f.name}”`, true);
+    showToast(`Restored “${f.name}” into ${treeName}`, true);
     requestAnimationFrame(() => fit(true));
   };
 
@@ -1047,6 +1081,8 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
   const selNode = selId && !isStackId(selId) ? idx.byId.get(selId) : null;
   const selParent = selNode ? idx.parentOf.get(selNode.id) : null;
   const rootOpenKids = vis.kids.get('root') || [];
+  // The top of the tree always shows the tree's name; renaming it renames the tree.
+  const rootNode = doc.root.title === treeName ? doc.root : { ...doc.root, title: treeName };
 
   return (
     <>
@@ -1064,13 +1100,16 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
             ) : (
               <TreeNodeView
                 key={it.id}
-                node={it.node}
+                node={it.id === 'root' ? rootNode : it.node}
                 depth={it.depth}
                 idx={idx}
                 stats={idx.stats.get(it.id)!}
                 selected={selId === it.id}
                 dim={isDim(it)}
-                context={!!filter && filter.context.has(it.id) && !matchesFilters(it.node, idx, filters, today)}
+                context={!!filter && filter.context.has(it.id) && !matchesFilters(it.node, idx, filters, today, idle)}
+                idleDays={idle.get(it.id)}
+                idleSince={activity.get(it.id)}
+                idleInside={idleAbove.has(it.id)}
                 editing={editing?.id === it.id ? editing : null}
                 meetings={doc.meetings}
                 folded={!filter?.context.has(it.id) && isFolded(it.node, idx, { openDone })}
@@ -1085,6 +1124,9 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
 
       <Toolbar
         ref={topbarRef}
+        treeName={treeName}
+        treeMenuOpen={treeMenuOpen}
+        onTreeMenu={onTreeMenu}
         hideDone={hideDone}
         focusMode={focusMode}
         canUndo={store.canUndo}
@@ -1110,7 +1152,7 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
           zoomAt(a.w / 2, (a.top + a.bottom) / 2, f, true);
         }}
         onHelp={() => setPanel((p) => (p === 'help' ? null : 'help'))}
-        onExport={() => exportDoc(doc)}
+        onExport={() => exportDoc(doc, treeName)}
         onImport={() => fileRef.current?.click()}
       />
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { onImport(e.target.files?.[0]); e.target.value = ''; }} />
@@ -1120,6 +1162,8 @@ function TreeApp({ store, doc }: { store: ReturnType<typeof useTreeStore>; doc: 
         <FilterMenu
           filters={filters}
           counts={filterCounts}
+          idleDays={idleDays}
+          onIdleDays={(d) => apply(M.setIdleDays(doc, d))}
           anchor={filterMenu}
           onChange={setFilters}
           onClose={(refocus) => {

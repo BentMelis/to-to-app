@@ -23,6 +23,7 @@ export const mk = (type: ChildType, title: string, children: TreeNode[] = [], do
   title,
   done,
   collapsed: false,
+  touched: Date.now(),
   children,
 });
 
@@ -32,6 +33,7 @@ export function starter(): TreeDoc {
   return {
     v: DOC_VERSION,
     meetings: defaultMeetings(),
+    settings: { idleDays: 7 },
     root: {
       id: 'root',
       type: 'root',
@@ -108,6 +110,8 @@ function normalize(raw: unknown, depth: number): TreeNode {
     ...(typeof n.due === 'string' && DUE_RE.test(n.due) && canSchedule(type) ? { due: n.due } : {}),
     // Kept even if the type changes, so turning a project into a note and back loses nothing.
     ...(typeof n.notes === 'string' && n.notes.trim() && depth > 0 ? { notes: n.notes } : {}),
+    // Items from before activity tracking start their clock now, so nothing is instantly "idle".
+    ...(depth > 0 ? { touched: typeof n.touched === 'number' && isFinite(n.touched) ? n.touched : Date.now() } : {}),
     children,
   };
 }
@@ -119,7 +123,9 @@ export function parseDoc(input: unknown): TreeDoc | null {
       const root = normalize((s as { root: unknown }).root, 0);
       const meetings = readMeetings((s as { meetings?: unknown }).meetings);
       pruneFlags(root, new Set(meetings.map((m) => m.id)));
-      return { v: DOC_VERSION, root, meetings };
+      const raw = (s as { settings?: { idleDays?: unknown } }).settings;
+      const idleDays = typeof raw?.idleDays === 'number' && raw.idleDays >= 0 ? Math.min(365, Math.round(raw.idleDays)) : 7;
+      return { v: DOC_VERSION, root, meetings, settings: { idleDays } };
     }
   } catch {
     /* fall through */
@@ -523,4 +529,13 @@ export function pathTo(idx: TreeIndex, id: string) {
   const out: string[] = [];
   for (let p = idx.parentOf.get(id); p && p.type !== 'root'; p = idx.parentOf.get(p.id) ?? null) out.unshift(p.title || 'Untitled');
   return out;
+}
+
+/* ---------- Settings ---------- */
+
+export const idleDaysOf = (doc: TreeDoc) => doc.settings?.idleDays ?? 7;
+
+export function setIdleDays(doc: TreeDoc, days: number) {
+  if (days < 0 || idleDaysOf(doc) === days) return null;
+  return { doc: { ...doc, settings: { ...doc.settings, idleDays: days } } };
 }

@@ -29,9 +29,11 @@ export interface Filters {
   high: boolean;
   /** Open items whose deadline is orange or red (3 days or fewer left, or overdue). */
   dueSoon: boolean;
+  /** Open items without activity for the idle threshold (see activity.ts). */
+  idle?: boolean;
 }
-export const NO_FILTERS: Filters = { high: false, dueSoon: false };
-export const anyFilter = (f: Filters) => f.high || f.dueSoon;
+export const NO_FILTERS: Filters = { high: false, dueSoon: false, idle: false };
+export const anyFilter = (f: Filters) => f.high || f.dueSoon || !!f.idle;
 
 export interface FilterResult {
   /** Everything that stays visible: matches, the path above them, and what's inside them. */
@@ -42,14 +44,15 @@ export interface FilterResult {
 }
 
 /** True when an unfinished item matches any of the active filters. */
-export function matchesFilters(n: TreeNode, idx: TreeIndex, f: Filters, today: string) {
+export function matchesFilters(n: TreeNode, idx: TreeIndex, f: Filters, today: string, idle?: Map<string, number>) {
   if (n.type === 'root' || n.type === 'note' || isComplete(idx, n)) return false;
+  if (f.idle && idle?.has(n.id)) return true;
   if (f.high && n.high) return true;
   if (f.dueSoon && n.due && dueLevel(daysUntil(n.due, today)) !== 'later') return true;
   return false;
 }
 
-export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: string): FilterResult | null {
+export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: string, idle?: Map<string, number>): FilterResult | null {
   if (!anyFilter(f)) return null;
   const show = new Set<string>(['root']);
   const context = new Set<string>(['root']);
@@ -59,7 +62,7 @@ export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: 
     n.children.forEach(addAll);
   };
   const walk = (n: TreeNode) => {
-    if (matchesFilters(n, idx, f, today)) {
+    if (matchesFilters(n, idx, f, today, idle)) {
       matches++;
       addAll(n);
       for (let p = idx.parentOf.get(n.id); p; p = idx.parentOf.get(p.id) ?? null) {

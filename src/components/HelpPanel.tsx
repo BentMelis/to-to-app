@@ -15,6 +15,7 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="st">S</kbd>, 'Stack finished items again'],
   [<kbd key="c">C</kbd>, 'Collapse or expand'],
   [<kbd key="f">F</kbd>, 'Fit the tree on screen'],
+  [<><kbd>W</kbd> then <kbd>1</kbd>–<kbd>9</kbd></>, 'Switch to another tree'],
   [<><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></>, 'Undo'],
 ];
 
@@ -29,6 +30,8 @@ export function HelpPanel() {
           <tr><td><b>Note</b></td><td>Info to keep next to your work. No checkbox, doesn’t count toward progress.</td></tr>
         </tbody>
       </table>
+      <h2 style={{ marginTop: 16 }}>Several trees</h2>
+      <p className="lead">Keep areas of your life apart: work, personal, a side project. Each tree has its own projects, meetings, filters and settings. Switch with the tree name in the top-left corner, or press <kbd>W</kbd> and a number. Rename the top of a tree to rename the tree.</p>
       <h2 style={{ marginTop: 16 }}>Moving things</h2>
       <p className="lead">Drag an item onto another to put it inside, or onto its top or bottom edge to place it before or after. On a touchscreen, press and hold first.</p>
       <h2 style={{ marginTop: 16 }}>Shortcuts</h2>
@@ -41,7 +44,8 @@ export function HelpPanel() {
       </table>
       <p>Finished items turn grey and stack up at the bottom of their branch. Click a stack to look through it.</p>
       <p>Deadlines turn <span className="due-chip soon">orange</span> when 3 days or fewer are left and <span className="due-chip urgent">red</span> from the last day on, including overdue. High-priority items get a <span className="prio-badge" aria-hidden="true">!</span>.</p>
-      <p>Use <b>Filter</b> to show only high-priority or soon-due items. The projects above them stay visible, faded, so you know where they live.</p>
+      <p>Projects and todos that nothing has happened to for a while (7 days by default) get a quiet <span className="idle-chip">idle</span> tag and a dashed border. Any change to the item or anything inside it counts as activity; folding doesn’t. Change the number of days, or turn it off, under <b>Filter</b>.</p>
+      <p>Use <b>Filter</b> to show only high-priority, soon-due or idle items. The projects above them stay visible, faded, so you know where they live.</p>
       <p>Projects and todos have a <b>notes</b> page for longer context: press <kbd>N</kbd> or click the page icon next to the item. Items with notes show a filled icon.</p>
       <p>Press <kbd>Q</kbd> to bring an item up at a meeting or with a person: <b>ask</b> a question, or just <b>mention</b> it (“this is done”). Each meeting has its own colour; set them up under <b>Meetings → Edit</b>. The <b>Meetings</b> list shows per meeting what to ask and what to mention, and copies it as an agenda.</p>
       <p>With Focus on, selecting something fades everything outside its project and centres that project.</p>

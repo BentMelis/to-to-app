@@ -16,6 +16,8 @@ export interface TreeNode {
   due?: string;
   /** Free-form notes shown in the side panel (projects and todos). */
   notes?: string;
+  /** Last time this item itself changed (ms since epoch). Set automatically; see activity.ts. */
+  touched?: number;
   children: TreeNode[];
 }
 
@@ -24,6 +26,12 @@ export interface TreeDoc {
   root: TreeNode;
   /** The user's own list of meetings items can be flagged for (standup, weekly sync, 1:1…). */
   meetings: Meeting[];
+  settings?: DocSettings;
+}
+
+export interface DocSettings {
+  /** Open items without activity for this many days get an idle heads-up. 0 = off. */
+  idleDays: number;
 }
 
 export type FlagKind = 'ask' | 'mention';
