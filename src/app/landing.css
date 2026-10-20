@@ -29,7 +29,7 @@ html:has(.landing) { height: auto; scroll-behavior: smooth; scroll-padding-top: 
 /* ---------- Nav ---------- */
 .lp-nav { position: sticky; top: 0; z-index: 10; isolation: isolate; display: flex; align-items: center; gap: 28px; max-width: var(--measure); margin: 0 auto; padding: 14px 24px; }
 .lp-nav::before { content: ""; position: absolute; inset: 0 -100vw; z-index: -1; background: var(--paper); border-bottom: 1.5px solid color-mix(in srgb, var(--edge) 70%, transparent); }
-.lp-nav nav { display: flex; gap: 22px; margin-left: auto; font-size: 15px; }
+.lp-nav > .btn { margin-left: auto; }
 .lp-nav nav a { text-decoration: none; color: var(--muted); }
 .lp-nav nav a:hover { color: var(--ink); }
 .brand { display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-head); font-weight: 700; font-size: 19px; text-decoration: none; }

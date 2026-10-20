@@ -134,10 +134,6 @@ export default function Landing() {
           <Logo />
           <span>Todo Tree</span>
         </Link>
-        <nav aria-label="Sections">
-          <a href="#how">How it works</a>
-          <a href="#mcp">Coming soon</a>
-        </nav>
         <Link href="/app" className="btn small">
           {cta}
         </Link>
