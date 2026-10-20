@@ -20,6 +20,13 @@ npm run dev        # http://localhost:3000
 | `npm run typecheck` | TypeScript check |
 | `npm run lint` | ESLint |
 
+## Routes
+
+| Route | What |
+| --- | --- |
+| `/` | Landing page (`src/components/landing/`). Returning visitors see "Open your trees"; the installed app skips it |
+| `/app` | The app itself (`TreesApp`). The PWA starts here |
+
 ## What's new compared to the POC
 
 - **Drag & drop** — drag an item onto another to put it inside, or onto its top/bottom edge to place it
@@ -67,6 +74,7 @@ npm run dev        # http://localhost:3000
 src/
   app/                  Next.js routes: layout, page, PWA manifest, global styles
   components/
+    landing/            The landing page: animated hero tree, how-it-works demos, MCP preview (coming soon)
     TreesApp.tsx        The list of trees around the canvas: switching, creating, deleting (+ undo)
     TreeMenu.tsx        Tree switcher menu and "Rename, reorder, delete…"
     TodoTree.tsx        The canvas for one tree: state, camera (pan/zoom/focus), keyboard, drag & drop

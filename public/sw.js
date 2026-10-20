@@ -1,8 +1,8 @@
 // Todo tree service worker: keeps the app working offline.
 // Pages: network first so updates arrive, cached copy when offline.
 // Static assets (/_next/static, icons, fonts): cache first — their URLs are content-hashed.
-const CACHE = 'todo-tree-v3';
-const SHELL = ['/', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/favicon-32.png'];
+const CACHE = 'todo-tree-v4';
+const SHELL = ['/', '/app', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/favicon-32.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -24,10 +24,11 @@ self.addEventListener('fetch', (e) => {
       fetch(req)
         .then((res) => {
           const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put('/', copy));
+          if (res.ok) caches.open(CACHE).then((c) => c.put(req.url, copy));
           return res;
         })
-        .catch(() => caches.match('/')),
+        // Offline: the page itself if we have it, otherwise the app (it works without a network).
+        .catch(() => caches.match(req.url).then((hit) => hit || caches.match('/app'))),
     );
     return;
   }

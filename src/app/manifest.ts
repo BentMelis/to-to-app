@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'Todo tree',
     short_name: 'Todo tree',
     description: 'A todo list shaped like a tree: projects branch into sub-projects, todos and notes.',
-    start_url: '/',
+    start_url: '/app',
     scope: '/',
     display: 'standalone',
     orientation: 'any',
