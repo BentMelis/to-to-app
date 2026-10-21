@@ -1,7 +1,10 @@
-# Todo tree
+# TwigList
 
-A todo list shaped like a tree. Projects branch into sub-projects, todos and notes.
+**[twiglist.app](https://twiglist.app)** · A to-do list shaped like a tree. Projects branch into sub-projects, todos and notes.
 Built with Next.js (App Router) and React, installable as a PWA, local-first.
+
+The product was called *Todo Tree* during the proof of concept; that name survives only in internal identifiers
+(the `todo-tree:` storage prefix, the `TodoTree` canvas component) so nobody's saved data is lost.
 
 The original single-file proof of concept lives in [`poc/`](./poc) for reference.
 
@@ -26,6 +29,10 @@ npm run dev        # http://localhost:3000
 | --- | --- |
 | `/` | Landing page (`src/components/landing/`). Returning visitors see "Open your trees"; the installed app skips it |
 | `/app` | The app itself (`TreesApp`). The PWA starts here |
+| `/robots.txt`, `/sitemap.xml` | Generated from `src/app/robots.ts` and `sitemap.ts` |
+
+The name, domain and description live in `src/lib/site.ts` (`NEXT_PUBLIC_SITE_URL` overrides the domain for previews);
+titles, the install manifest, canonical URLs and social previews read from there.
 
 ## What's new compared to the POC
 
@@ -111,7 +118,8 @@ public/sw.js            Offline service worker (production only)
 
 ## Data & storage
 
-Everything is stored in the browser (`localStorage`):
+Everything is stored in the browser (`localStorage`). The keys keep the old `todo-tree:` prefix on purpose:
+renaming them would strand the data people already have.
 
 | Key | What |
 | --- | --- |
@@ -135,7 +143,7 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
   `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
-  [Todo Tree – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
+  [TwigList – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).
 
 ## Deploying

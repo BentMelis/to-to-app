@@ -26,7 +26,7 @@ export function ConsentBanner() {
     <section className="consent" role="dialog" aria-modal="false" aria-labelledby="consent-title" aria-describedby="consent-text">
       <h2 id="consent-title">Can we count your visit?</h2>
       <p id="consent-text">
-        With your permission we use Google Analytics to see how Todo Tree is used: which pages, and actions like creating a tree. Never what you
+        With your permission we use Google Analytics to see how TwigList is used: which pages, and actions like creating a tree. Never what you
         write: your projects, todos and notes stay in your browser.
       </p>
       <div className="consent-actions">

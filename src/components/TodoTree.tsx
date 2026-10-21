@@ -1190,7 +1190,7 @@ function TreeCanvas({
   const onImport = async (f: File | undefined) => {
     if (!f) return;
     const d = await importDoc(f);
-    if (!d) return showToast('That file isn’t a Todo tree backup');
+    if (!d) return showToast('That file isn’t a TwigList backup');
     store.commit(d);
     setSel(null);
     showToast(`Restored “${f.name}” into ${treeName}`, true);
@@ -1209,7 +1209,7 @@ function TreeCanvas({
 
   return (
     <>
-      <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Todo tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
+      <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Your tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('.node');
         const id = el?.dataset.id;
         if (id && !isStackId(id) && !sealed.has(id) && !(e.target as HTMLElement).closest('button')) setEditing({ id, isNew: false });

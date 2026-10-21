@@ -124,7 +124,7 @@ const EXTRAS: { title: string; text: string; art: React.ReactNode }[] = [
 
 export default function Landing() {
   const returning = useReturning();
-  const cta = returning ? 'Open your trees' : 'Open Todo Tree';
+  const cta = returning ? 'Open your trees' : 'Open TwigList';
 
   return (
     <div className="landing">
@@ -132,9 +132,9 @@ export default function Landing() {
         Skip to content
       </a>
       <header className="lp-nav">
-        <Link href="/" className="brand" aria-label="Todo Tree home">
+        <Link href="/" className="brand" aria-label="TwigList home">
           <Logo />
-          <span>Todo Tree</span>
+          <span>TwigList</span>
         </Link>
         <Link href="/app" className="btn small" onClick={() => track('open_app', { from: 'nav' })}>
           {cta}
@@ -150,7 +150,7 @@ export default function Landing() {
               not in lists.
             </h1>
             <p className="lede">
-              Todo Tree lays all your projects out as one tree you can take in at a glance. Break work down as far as you need, tick it off, and
+              TwigList lays all your projects out as one tree you can take in at a glance. Break work down as far as you need, tick it off, and
               walk into every meeting knowing what to ask.
             </p>
             <div className="hero-cta">
@@ -257,7 +257,7 @@ export default function Landing() {
       <footer className="lp-foot">
         <span className="brand small">
           <Logo />
-          Todo Tree
+          TwigList
         </span>
         <span>A SideQuest project</span>
         <CookieSettings />

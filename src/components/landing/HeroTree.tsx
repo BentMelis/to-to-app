@@ -109,7 +109,7 @@ export function HeroTree() {
   const ptr = reduced ? null : pointer(shown, items);
 
   return (
-    <figure className="hero-figure" aria-label="An animated example of a tree in Todo Tree">
+    <figure className="hero-figure" aria-label="An animated example of a tree in TwigList">
       <div
         className="hero-stage-wrap"
         ref={wrap}

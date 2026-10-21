@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TwigList reel</title>
+<style>
+@font-face { font-family: "Bricolage"; src: url(fonts/bricolage-grotesque-latin-600-normal.woff2) format("woff2"); font-weight: 600; }
+@font-face { font-family: "Bricolage"; src: url(fonts/bricolage-grotesque-latin-700-normal.woff2) format("woff2"); font-weight: 700; }
+@font-face { font-family: "Bricolage"; src: url(fonts/bricolage-grotesque-latin-800-normal.woff2) format("woff2"); font-weight: 800; }
+@font-face { font-family: "Atkinson"; src: url(fonts/atkinson-hyperlegible-latin-400-normal.woff2) format("woff2"); font-weight: 400; }
+@font-face { font-family: "Atkinson"; src: url(fonts/atkinson-hyperlegible-latin-700-normal.woff2) format("woff2"); font-weight: 700; }
+
+:root {
+  --paper: #EDF0E8; --dot: #C9D0C3; --surface: #FFFFFF; --ink: #1C241F; --muted: #56635A; --edge: #C6CDC1; --bark: #9A8C7B;
+  --leaf: #2D7342; --leaf-soft: #DDEBDF; --done: #F3F5F0; --chip: #E4E8E0;
+  --ask: #A85A00; --soon: #C2410C; --soon-soft: #FFE6D5; --urgent: #B91C1C; --urgent-soft: #FDE0DE; --live: #E5484D;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #000; }
+#stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--paper); color: var(--ink);
+  font-family: "Atkinson", system-ui, sans-serif;
+  background-image: radial-gradient(circle, var(--dot) 2.2px, transparent 2.8px); background-size: 48px 48px; }
+.abs { position: absolute; left: 0; top: 0; }
+.hidden { opacity: 0; }
+
+/* Captions */
+.cap { position: absolute; left: 70px; right: 70px; top: 250px; text-align: center; font-family: "Bricolage"; font-weight: 800; font-size: 84px;
+  line-height: 1.02; letter-spacing: -1.5px; opacity: 0; }
+.cap em { font-style: normal; color: var(--leaf); }
+.sub { position: absolute; left: 70px; right: 70px; top: 470px; text-align: center; font-size: 40px; color: var(--muted); opacity: 0; }
+
+/* The messy list */
+#list { position: absolute; left: 110px; top: 560px; width: 860px; height: 960px; border-radius: 36px; background: var(--surface);
+  border: 3px solid var(--edge); overflow: hidden; box-shadow: 0 40px 80px -40px rgba(0,0,0,.35); }
+#list header { position: absolute; left: 0; right: 0; top: 0; height: 120px; display: flex; align-items: center; gap: 18px; padding: 0 44px;
+  background: var(--surface); border-bottom: 3px solid var(--edge); z-index: 2; font-family: "Bricolage"; font-weight: 800; font-size: 48px; }
+#list header b { margin-left: auto; font-family: "Atkinson"; font-size: 30px; font-weight: 700; color: #fff; background: var(--urgent); border-radius: 30px; padding: 6px 18px; }
+#rows { position: absolute; left: 0; right: 0; top: 120px; }
+.row { display: flex; align-items: center; gap: 22px; height: 92px; padding: 0 44px; border-bottom: 2px solid #EEF1EB; font-size: 36px; }
+.row i { width: 36px; height: 36px; border-radius: 50%; border: 4px solid var(--bark); flex: none; }
+.row span { margin-left: auto; font-size: 24px; font-weight: 700; color: var(--muted); background: var(--chip); border-radius: 20px; padding: 4px 14px; }
+
+/* Tree */
+svg#links { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; overflow: visible; }
+svg#links path { fill: none; stroke: var(--bark); stroke-width: 6; stroke-linecap: round; }
+.node { position: absolute; display: flex; align-items: center; gap: 16px; height: 76px; padding: 0 22px 0 16px; background: var(--surface);
+  border: 3px solid var(--edge); border-radius: 999px; font-size: 28px; white-space: nowrap; transform-origin: 0 50%; opacity: 0; }
+.node .t { position: relative; overflow: hidden; text-overflow: ellipsis; }
+.root { border: none; background: transparent; padding: 0; height: 70px; font-family: "Bricolage"; font-weight: 800; font-size: 54px; }
+.proj { height: 90px; border: 4px solid var(--ink); border-radius: 14px; font-weight: 700; font-size: 30px; }
+.check { flex: none; position: relative; width: 38px; height: 38px; border-radius: 50%; border: 4px solid var(--bark); display: grid; place-items: center; }
+.check .fill { position: absolute; inset: -4px; border-radius: 50%; background: var(--leaf); opacity: 0; }
+.check svg { position: relative; width: 24px; height: 24px; }
+.check svg path { fill: none; stroke: #fff; stroke-width: 3.4; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 20; stroke-dashoffset: 20; }
+.ring { flex: none; width: 40px; height: 40px; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke: var(--chip); stroke-width: 6; }
+.ring .f { stroke: var(--leaf); }
+.strike { position: absolute; left: 0; top: 52%; height: 4px; width: 100%; background: var(--leaf); transform-origin: 0 50%; transform: scaleX(0); }
+.layer { position: absolute; inset: -3px; border-radius: inherit; border: 3px solid #B7CDB9; background: var(--done); z-index: -1; opacity: 0; }
+.chipbox { position: relative; margin-left: auto; height: 40px; width: 134px; }
+.chip { position: absolute; right: 0; top: 0; height: 40px; display: grid; place-items: center; padding: 0 14px; border-radius: 20px; font-size: 22px; font-weight: 700; opacity: 0; white-space: nowrap; }
+.chip.later { background: var(--chip); color: var(--muted); }
+.chip.soon { background: var(--soon-soft); color: var(--soon); }
+.chip.urgent { background: var(--urgent); color: #fff; }
+.flag { margin-left: auto; padding: 4px 14px; border-radius: 10px; background: var(--ask); color: #fff; font-size: 21px; font-weight: 700; opacity: 0; }
+.lockb { flex: none; width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; opacity: 0; }
+.lockb svg, .sealed svg { width: 22px; height: 22px; }
+.sealed { position: absolute; inset: -3px; border-radius: inherit; border: 3px dashed var(--edge); display: flex; align-items: center; gap: 16px; padding: 0 22px 0 16px;
+  background: repeating-linear-gradient(135deg, #fff 0 16px, #EEF1EB 16px 32px); opacity: 0; }
+.sealed .lk { width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--paper); display: grid; place-items: center; flex: none; }
+.sealed .bar { width: 170px; height: 20px; border-radius: 10px; background: #B9C2BB; filter: blur(4px); }
+.proj .sealed { border-width: 4px; border-color: #8A938C; }
+
+/* Pointer */
+#ptr { position: absolute; left: 0; top: 0; width: 64px; height: 64px; opacity: 0; z-index: 9; }
+#ptr svg { width: 64px; height: 64px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.25)); }
+#ripple { position: absolute; left: 0; top: 0; width: 90px; height: 90px; margin: -45px 0 0 -45px; border-radius: 50%; border: 6px solid var(--leaf); opacity: 0; z-index: 8; }
+
+/* Agenda */
+#agenda { position: absolute; left: 150px; top: 1330px; width: 780px; border-radius: 28px; background: var(--surface); border: 3px solid var(--edge);
+  padding: 30px 40px 26px; font-size: 32px; box-shadow: 0 40px 80px -40px rgba(0,0,0,.35); opacity: 0; }
+#agenda .h { display: flex; align-items: center; justify-content: space-between; font-family: "Bricolage"; font-weight: 800; font-size: 42px; margin-bottom: 10px; }
+#agenda .sec { font-size: 22px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 14px 0 4px; }
+#agenda p { margin: 0 0 6px; }
+.copy { position: relative; width: 210px; height: 56px; }
+.copy span { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 14px; font-family: "Atkinson"; font-size: 26px; font-weight: 700; }
+.copy .a { border: 3px solid var(--edge); }
+.copy .b { background: var(--leaf); color: #fff; opacity: 0; }
+
+/* Sharing badge + keys */
+#live { position: absolute; left: 50%; top: 560px; transform: translateX(-50%); display: flex; align-items: center; gap: 14px; padding: 10px 26px;
+  border-radius: 40px; background: var(--ink); color: #fff; font-size: 32px; font-weight: 700; opacity: 0; white-space: nowrap; }
+#live i { width: 18px; height: 18px; border-radius: 50%; background: var(--live); }
+#keys { position: absolute; left: 0; right: 0; top: 1400px; display: flex; justify-content: center; align-items: center; gap: 18px; font-size: 44px; font-weight: 700; opacity: 0; }
+#keys kbd { font-family: "Atkinson"; font-size: 44px; padding: 14px 28px; border-radius: 18px; background: var(--surface); border: 3px solid var(--edge); border-bottom-width: 9px; }
+
+/* End card */
+#end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; padding-bottom: 180px; opacity: 0; }
+#end .mark { width: 300px; height: 220px; }
+#end .mark path { fill: none; stroke: var(--bark); stroke-width: 12; stroke-linecap: round; }
+#end .mark rect { fill: var(--surface); stroke: var(--ink); stroke-width: 12; }
+#end .mark circle { fill: var(--surface); stroke: var(--leaf); stroke-width: 12; }
+#end h1 { font-family: "Bricolage"; font-weight: 800; font-size: 150px; letter-spacing: -4px; margin: 30px 0 10px; }
+#end .tag { font-family: "Bricolage"; font-weight: 700; font-size: 54px; color: var(--muted); margin: 0 0 70px; }
+#end .tag em { font-style: normal; color: var(--leaf); }
+#end .soon { font-size: 44px; font-weight: 700; background: var(--ink); color: var(--paper); border-radius: 50px; padding: 18px 46px; }
+#end .follow { margin-top: 30px; font-size: 40px; font-weight: 700; }
+#end .fine { margin-top: 18px; font-size: 32px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<script>
+/*
+ * TwigList promo reel: 1080×1920, ~26 s. Every motion is a Web Animation on one timeline, so render.mjs can
+ * seek to any frame exactly (deterministic, no timers). Open this file in a browser to preview (it plays live).
+ */
+const S = document.getElementById('stage');
+const DURATION = 26;
+const ms = (s) => s * 1000;
+const ease = { out: 'cubic-bezier(.2,.8,.2,1)', inOut: 'cubic-bezier(.6,0,.2,1)', back: 'cubic-bezier(.3,1.5,.5,1)', lin: 'linear' };
+
+function el(tag, cls, html, parent = S) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html != null) e.innerHTML = html;
+  parent.appendChild(e);
+  return e;
+}
+/** One animation: starts at `at` seconds, lasts `dur`, holds its end state afterwards. */
+function A(target, keyframes, at, dur, easing = ease.out) {
+  return target.animate(keyframes, { delay: ms(at), duration: ms(dur), easing, fill: 'forwards' });
+}
+const fadeIn = (e, at, dur = 0.4, from = 'translateY(30px)') => A(e, [{ opacity: 0, transform: from }, { opacity: 1, transform: 'none' }], at, dur);
+const fadeOut = (e, at, dur = 0.35) => A(e, [{ opacity: 1 }, { opacity: 0 }], at, dur, ease.lin);
+const pop = (e, at, base = '') => A(e, [{ opacity: 0, transform: `${base} scale(.6)` }, { opacity: 1, transform: `${base} scale(1)` }], at, 0.45, ease.back);
+
+function caption(html, at, until, sub, subAt) {
+  const c = el('div', 'cap', html);
+  fadeIn(c, at, 0.45);
+  if (until) A(c, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-30px)' }], until, 0.3);
+  if (sub) {
+    const s = el('div', 'sub', sub);
+    fadeIn(s, subAt ?? at + 0.4, 0.4);
+    if (until) fadeOut(s, until, 0.3);
+  }
+  return c;
+}
+
+const CHECK = '<svg viewBox="0 0 16 16"><path d="M3.5 8.5l3 3 6-7"/></svg>';
+const LOCK = '<svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5" fill="currentColor"/><path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+
+/* ================= 1. Hook: one endless scroll (0 – 3.4 s) ================= */
+caption('Your to-do list?', 0.15, 3.1, 'One endless scroll.', 1.0);
+const list = el('div', '', null);
+list.id = 'list';
+list.innerHTML = '<header>To do <b>47</b></header><div id="rows"></div>';
+const rows = list.querySelector('#rows');
+const MESSY = [
+  ['Website copy', 'Work'], ['Call the dentist', 'Home'], ['Budget for Q4?', 'Work'], ['Buy plant food', 'Home'], ['Review designs', 'Work'],
+  ['Ask Sam about launch', 'Work'], ['Renew passport', 'Home'], ['Collect numbers', 'Work'], ['Gym 3x', 'Me'], ['Fix the login bug', 'Side'],
+  ['Book a room', 'Work'], ['Birthday gift Anna', 'Home'], ['Launch checklist', 'Work'], ['Pay invoice', 'Home'], ['Write blog post', 'Side'],
+  ['Standup question??', 'Work'], ['Clean garage', 'Home'], ['Reply to Tom', 'Work'], ['Domain name ideas', 'Side'], ['Water the garden', 'Home'],
+  ['Send the quote', 'Work'], ['Car service', 'Home'], ['Logo sketches', 'Side'], ['Prepare demo', 'Work'], ['Read that book', 'Me'],
+];
+MESSY.forEach(([t, tag]) => el('div', 'row', `<i></i>${t}<span>${tag}</span>`, rows));
+fadeIn(list, 0.1, 0.5, 'translateY(60px) scale(.96)');
+A(rows, [{ transform: 'translateY(0)' }, { transform: 'translateY(-1500px)' }], 0.7, 2.4, 'cubic-bezier(.5,0,.6,1)');
+A(list, [{ opacity: 1, transform: 'none', filter: 'blur(0)' }, { opacity: 0, transform: 'scale(.85)', filter: 'blur(14px)' }], 3.0, 0.5, ease.inOut);
+
+/* ================= Tree geometry ================= */
+const X = { root: 28, proj: 220, todo: 602 };
+const W = { root: 160, proj: 352, todo: 458 };
+const Y0 = { r: 1005, p1: 850, p2: 1160, t1: 750, t2: 850, t3: 950, t4: 1110, t5: 1210 };
+const H = { root: 70, proj: 90, todo: 76 };
+const tree = el('div', 'abs', null);
+tree.style.width = '1080px';
+tree.style.height = '1920px';
+const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+svg.id = 'links';
+tree.appendChild(svg);
+
+function node(kind, title, x, yc, extra = '') {
+  const h = H[kind === 'root' ? 'root' : kind === 'proj' ? 'proj' : 'todo'];
+  const n = el('div', `node ${kind}`, null, tree);
+  n.style.left = x + 'px';
+  n.style.top = yc - h / 2 + 'px';
+  n.style.width = (kind === 'root' ? W.root : kind === 'proj' ? W.proj : W.todo) + 'px';
+  if (kind === 'proj') n.innerHTML = `<svg class="ring" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15"/><circle class="f" cx="20" cy="20" r="15" stroke-dasharray="94.2" stroke-dashoffset="94.2"/></svg>`;
+  if (kind === 'todo') n.innerHTML = `<span class="check"><span class="fill"></span>${CHECK}</span>`;
+  n.innerHTML += `<span class="t">${title}<span class="strike"></span></span>${extra}`;
+  return n;
+}
+const linkD = (x1, y1, x2, y2) => { const mx = (x1 + x2) / 2; return `M${x1} ${y1}C${mx} ${y1},${mx} ${y2},${x2} ${y2}`; };
+function link(fromX, fromY, toX, toY, at) {
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', linkD(fromX, fromY, toX, toY));
+  p.setAttribute('pathLength', '1');
+  p.style.strokeDasharray = '1';
+  p.style.strokeDashoffset = '1';
+  svg.appendChild(p);
+  A(p, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], at, 0.45);
+  return p;
+}
+const rootR = X.root + W.root, projR = X.proj + W.proj;
+const nRoot = node('root', 'Work', X.root, Y0.r);
+const nP1 = node('proj', 'Website relaunch', X.proj, Y0.p1);
+const nP2 = node('proj', 'Q4 report', X.proj, Y0.p2, `<span class="lockb">${LOCK}</span><span class="sealed"><span class="lk">${LOCK}</span><span class="bar"></span></span>`);
+const nT1 = node('todo', 'Write the copy', X.todo, Y0.t1, '<span class="layer l1"></span><span class="layer l2"></span>');
+const nT2 = node('todo', 'Review designs', X.todo, Y0.t2, '<span class="flag">? Standup</span>');
+const nT3 = node('todo', 'Launch checklist', X.todo, Y0.t3, '<span class="chipbox"><span class="chip later">Fri 31 Oct</span><span class="chip soon">Thursday</span><span class="chip urgent">Tomorrow</span></span>');
+const nT4 = node('todo', 'Collect numbers', X.todo, Y0.t4, '<span class="sealed"><span class="lk">' + LOCK + '</span><span class="bar"></span></span>');
+const nT5 = node('todo', 'Budget question', X.todo, Y0.t5, '<span class="flag">? Standup</span><span class="sealed"><span class="lk">' + LOCK + '</span><span class="bar"></span></span>');
+
+/* ================= 2. It grows like a tree (3.3 – 6.6 s) ================= */
+caption('What if it grew<br>like a <em>tree</em>?', 3.35, 6.5);
+pop(nRoot, 3.7);
+const lP1 = link(rootR, Y0.r, X.proj, Y0.p1, 4.0);
+const lP2 = link(rootR, Y0.r, X.proj, Y0.p2, 4.1);
+pop(nP1, 4.3); pop(nP2, 4.4);
+const lT1 = link(projR, Y0.p1, X.todo, Y0.t1, 4.65);
+const lT2 = link(projR, Y0.p1, X.todo, Y0.t2, 4.75);
+const lT3 = link(projR, Y0.p1, X.todo, Y0.t3, 4.85);
+const lT4 = link(projR, Y0.p2, X.todo, Y0.t4, 4.95);
+const lT5 = link(projR, Y0.p2, X.todo, Y0.t5, 5.05);
+[nT1, nT2, nT3, nT4, nT5].forEach((n, i) => pop(n, 4.9 + i * 0.1));
+A(nP1.querySelector('.f'), [{ strokeDashoffset: 94.2 }, { strokeDashoffset: 94.2 * (1 - 1 / 4) }], 5.6, 0.6);
+
+/* ================= 3. Tick it off: it sinks and stacks (6.6 – 10.6 s) ================= */
+caption('Done?<br>It gets out of the way.', 6.6, 10.4);
+const ptr = el('div', '', '<svg viewBox="0 0 20 20"><path d="M3 2l13 7.2-5.6 1.4L8 16.5z" fill="#1C241F" stroke="#fff" stroke-width="1.2" stroke-linejoin="round"/></svg>');
+ptr.id = 'ptr';
+const ripple = el('div', '', null);
+ripple.id = 'ripple';
+const at = (x, y) => `translate(${x}px, ${y}px)`;
+const checkXY = [X.todo + 16 + 19, Y0.t1];
+A(ptr, [{ opacity: 0, transform: at(540, 1620) }, { opacity: 1, transform: at(540, 1560) }], 7.0, 0.3);
+A(ptr, [{ opacity: 1, transform: at(540, 1560) }, { opacity: 1, transform: at(checkXY[0] - 8, checkXY[1] - 6) }], 7.3, 0.7, ease.inOut);
+A(ripple, [{ opacity: 0.9, transform: at(...checkXY) + ' scale(.3)' }, { opacity: 0, transform: at(...checkXY) + ' scale(1.4)' }], 8.05, 0.5);
+A(ptr, [{ transform: at(checkXY[0] - 8, checkXY[1] - 6) + ' scale(1)' }, { transform: at(checkXY[0] - 8, checkXY[1] - 6) + ' scale(.85)' }, { transform: at(checkXY[0] - 8, checkXY[1] - 6) + ' scale(1)' }], 8.0, 0.2);
+A(nT1.querySelector('.fill'), [{ opacity: 0 }, { opacity: 1 }], 8.1, 0.2);
+A(nT1.querySelector('.check svg path'), [{ strokeDashoffset: 20 }, { strokeDashoffset: 0 }], 8.15, 0.3);
+A(nT1.querySelector('.strike'), [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], 8.3, 0.35);
+A(nT1, [{ background: '#FFFFFF', borderColor: '#C6CDC1', color: '#1C241F' }, { background: '#F3F5F0', borderColor: '#9CC0A3', color: '#56635A' }], 8.3, 0.4);
+A(nP1.querySelector('.f'), [{ strokeDashoffset: 94.2 * 0.75 }, { strokeDashoffset: 94.2 * 0.5 }], 8.3, 0.5);
+A(ptr, [{ opacity: 1, transform: at(checkXY[0] - 8, checkXY[1] - 6) }, { opacity: 0, transform: at(980, 1420) }], 8.7, 0.6, ease.inOut);
+// Sink: the finished one drops below the open work; the rest move up.
+const sink = 8.9, sd = 0.7;
+const moveY = (n, dy) => A(n, [{ transform: 'translateY(0)' }, { transform: `translateY(${dy}px)` }], sink, sd, ease.inOut);
+moveY(nT1, 200); moveY(nT2, -100); moveY(nT3, -100);
+const morph = (p, x1, y1, y2a, y2b) => A(p, [{ d: `path("${linkD(x1, y1, X.todo, y2a)}")` }, { d: `path("${linkD(x1, y1, X.todo, y2b)}")` }], sink, sd, ease.inOut);
+morph(lT1, projR, Y0.p1, Y0.t1, Y0.t3); morph(lT2, projR, Y0.p1, Y0.t2, Y0.t1); morph(lT3, projR, Y0.p1, Y0.t3, Y0.t2);
+A(lT1, [{ stroke: '#9A8C7B', opacity: 1 }, { stroke: '#2D7342', opacity: 0.5 }], sink, sd);
+nT1.querySelectorAll('.layer').forEach((l, i) => A(l, [{ opacity: 0, transform: 'none' }, { opacity: i ? 0.6 : 1, transform: `translate(${(i + 1) * 9}px, ${(i + 1) * 9}px)` }], 9.6, 0.4));
+
+/* ================= 4. Deadlines speak up (10.6 – 14.6 s) ================= */
+caption('Deadlines turn red<br><em>before</em> they bite.', 10.6, 14.4);
+const [cLater, cSoon, cUrgent] = nT3.querySelectorAll('.chip');
+A(cLater, [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], 11.0, 0.35, ease.back);
+A(cLater, [{ opacity: 1 }, { opacity: 0 }], 12.0, 0.2);
+A(cSoon, [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], 12.0, 0.35, ease.back);
+A(nT3, [{ borderColor: '#C6CDC1', background: '#FFFFFF' }, { borderColor: '#C2410C', background: '#FFE6D5' }], 12.0, 0.3);
+A(cSoon, [{ opacity: 1 }, { opacity: 0 }], 13.0, 0.2);
+A(cUrgent, [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], 13.0, 0.35, ease.back);
+A(nT3, [{ borderColor: '#C2410C', background: '#FFE6D5' }, { borderColor: '#B91C1C', background: '#FDE0DE' }], 13.0, 0.3);
+A(cUrgent, [{ boxShadow: '0 0 0 0 rgba(185,28,28,.5)' }, { boxShadow: '0 0 0 18px rgba(185,28,28,0)' }], 13.35, 0.6);
+const days = el('div', 'sub', '');
+days.style.top = '1350px';
+days.style.fontSize = '46px';
+days.style.fontWeight = '700';
+['5 days left', '2 days left', '1 day left'].forEach((t, i) => {
+  const d = el('div', 'abs', t, days);
+  d.style.width = '100%';
+  d.style.color = ['#56635A', '#C2410C', '#B91C1C'][i];
+  d.style.opacity = 0;
+  A(d, [{ opacity: 0, transform: 'translateY(20px)' }, { opacity: 1, transform: 'none' }], 11.0 + i, 0.3);
+  A(d, [{ opacity: 1 }, { opacity: 0 }], i < 2 ? 11.9 + i : 14.3, 0.2);
+});
+A(days, [{ opacity: 0 }, { opacity: 1 }], 10.9, 0.1);
+
+/* ================= 5. Walk into standup prepared (14.6 – 18.6 s) ================= */
+caption('Walk into standup<br><em>prepared</em>.', 14.6, 18.4);
+pop(nT2.querySelector('.flag'), 15.0);
+pop(nT5.querySelector('.flag'), 15.4);
+const agenda = el('div', '', `<div class="h">Standup <span class="copy"><span class="a">Copy list</span><span class="b">Copied ✓</span></span></div>
+  <div class="sec">Questions</div><p>· Review designs?</p><p>· Budget question?</p><div class="sec">Updates</div><p>· Write the copy (done)</p>`);
+agenda.id = 'agenda';
+A(agenda, [{ opacity: 0, transform: 'translateY(80px)' }, { opacity: 1, transform: 'none' }], 16.0, 0.5);
+A(agenda.querySelector('.b'), [{ opacity: 0, transform: 'scale(.8)' }, { opacity: 1, transform: 'none' }], 17.2, 0.3, ease.back);
+A(agenda, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(60px)' }], 18.4, 0.35);
+
+/* ================= 6. Sharing your screen? (18.6 – 22.4 s) ================= */
+caption('Sharing your screen?', 18.6, 20.7);
+const live = el('div', '', '<i></i> You are presenting');
+live.id = 'live';
+A(live, [{ opacity: 0 }, { opacity: 1 }], 18.9, 0.3);
+A(live.querySelector('i'), [{ opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }, { opacity: 0.25 }, { opacity: 1 }], 19.0, 3.0, ease.lin);
+A(live, [{ opacity: 1 }, { opacity: 0 }], 22.2, 0.3);
+pop(nP2.querySelector('.lockb'), 19.5);
+const keys = el('div', '', '<kbd>Shift</kbd> + <kbd>H</kbd>');
+keys.id = 'keys';
+A(keys, [{ opacity: 0, transform: 'scale(.7)' }, { opacity: 1, transform: 'none' }], 20.0, 0.35, ease.back);
+A(keys.querySelectorAll('kbd')[0], [{ transform: 'none' }, { transform: 'translateY(6px)' }, { transform: 'none' }], 20.4, 0.25);
+A(keys.querySelectorAll('kbd')[1], [{ transform: 'none' }, { transform: 'translateY(6px)' }, { transform: 'none' }], 20.45, 0.25);
+A(keys, [{ opacity: 1 }, { opacity: 0 }], 22.1, 0.3);
+[nP2, nT4, nT5].forEach((n, i) => {
+  const s = n.querySelector('.sealed');
+  A(s, [{ opacity: 0, filter: 'blur(10px)' }, { opacity: 1, filter: 'blur(0)' }], 20.7 + i * 0.08, 0.4);
+  [...n.children].filter((c) => c !== s).forEach((c) => A(c, [{ opacity: 1, filter: 'blur(0)' }, { opacity: 0, filter: 'blur(12px)' }], 20.65 + i * 0.08, 0.35));
+});
+caption('Hide the private stuff.<br><em>One tap.</em>', 20.85, 22.3);
+
+/* ================= 7. End card (22.4 – 26 s) ================= */
+A(tree, [{ opacity: 1, transform: 'none', filter: 'blur(0)' }, { opacity: 0, transform: 'scale(.92)', filter: 'blur(10px)' }], 22.3, 0.5, ease.inOut);
+const end = el('div', '', `
+  <svg class="mark" viewBox="0 0 300 220"><path pathLength="1" d="M70 110C140 110,130 50,214 50"/><path pathLength="1" d="M70 110C140 110,130 170,214 170"/>
+  <rect x="14" y="80" width="62" height="62" rx="14"/><circle cx="238" cy="50" r="26"/><circle cx="238" cy="170" r="26"/></svg>
+  <h1>TwigList</h1>
+  <p class="tag">Plan in branches, <em>not in lists.</em></p>
+  <div class="soon">Coming soon</div>
+  <div class="follow">Follow for the launch</div>
+  <div class="fine">twiglist.app · Free · No account</div>`);
+end.id = 'end';
+A(end, [{ opacity: 0 }, { opacity: 1 }], 22.6, 0.3, ease.lin);
+const mark = end.querySelector('.mark');
+mark.querySelectorAll('path').forEach((p, i) => {
+  p.style.strokeDasharray = '1';
+  p.style.strokeDashoffset = '1';
+  A(p, [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], 22.9 + i * 0.1, 0.5);
+});
+pop(mark.querySelector('rect'), 22.7);
+mark.querySelector('rect').style.transformOrigin = '45px 111px';
+mark.querySelectorAll('circle').forEach((c, i) => {
+  c.style.transformOrigin = `238px ${50 + i * 120}px`;
+  pop(c, 23.3 + i * 0.1);
+});
+fadeIn(end.querySelector('h1'), 23.4, 0.5);
+fadeIn(end.querySelector('.tag'), 23.8, 0.5);
+A(end.querySelector('.soon'), [{ opacity: 0, transform: 'scale(.7)' }, { opacity: 1, transform: 'none' }], 24.3, 0.45, ease.back);
+fadeIn(end.querySelector('.follow'), 24.6, 0.4);
+fadeIn(end.querySelector('.fine'), 24.8, 0.4);
+end.querySelectorAll('h1, .tag, .soon, .follow, .fine').forEach((e) => (e.style.opacity = 0));
+
+/* ================= Timeline control ================= */
+const all = () => document.getAnimations();
+window.__reel = {
+  duration: DURATION,
+  fps: 30,
+  ready: document.fonts.ready,
+  seek(t) {
+    for (const a of all()) {
+      a.pause();
+      a.currentTime = ms(t);
+    }
+  },
+};
+// Live preview when opened directly; render.mjs adds ?render to take over.
+if (location.search.includes('render')) window.__reel.seek(0);
+else {
+  const loop = () => {
+    for (const a of all()) a.currentTime = (performance.now() % ms(DURATION + 1));
+    requestAnimationFrame(loop);
+  };
+  document.fonts.ready.then(loop);
+}
+</script>
+</body>
+</html>

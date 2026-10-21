@@ -6,13 +6,17 @@ import '@fontsource/bricolage-grotesque/latin-600.css';
 import '@fontsource/bricolage-grotesque/latin-700.css';
 import { ServiceWorker } from '@/components/ServiceWorker';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from '@/lib/site';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Todo tree',
-  description: 'A todo list shaped like a tree: projects branch into sub-projects, todos and notes.',
-  applicationName: 'Todo tree',
-  appleWebApp: { capable: true, title: 'Todo tree', statusBarStyle: 'default' },
+  metadataBase: new URL(SITE_URL),
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  appleWebApp: { capable: true, title: SITE_NAME, statusBarStyle: 'default' },
+  openGraph: { type: 'website', siteName: SITE_NAME, url: '/', title: SITE_NAME, description: SITE_DESCRIPTION, locale: 'en' },
+  twitter: { card: 'summary' },
   icons: {
     icon: [{ url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' }],
     apple: '/icons/apple-touch-icon.png',
