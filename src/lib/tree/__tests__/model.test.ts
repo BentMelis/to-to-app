@@ -151,25 +151,93 @@ describe('meeting flags (ask / mention, several meetings or people)', () => {
   });
 });
 
-describe('finished branches stay openable (bug: fully ticked project could not be opened)', () => {
-  const allDone = () => {
-    let d = doc();
-    d = M.toggleDone(d, 't2')!.doc; // P1 now complete: t1, t2, t3 done
+describe('done todos with steps stay openable (bug: a fully ticked branch could not be opened)', () => {
+  // t2 gets two steps; ticking t2 ticks both, so t2 is a done todo with children.
+  const withSteps = () => {
+    const d = doc();
+    d.root.children[0].children[1].children = [
+      { id: 's1', type: 'todo', title: 's1', done: false, collapsed: false, children: [] },
+      { id: 's2', type: 'todo', title: 's2', done: false, collapsed: false, children: [] },
+    ];
+    return M.toggleDone(d, 't2')!.doc;
+  };
+  it('a done todo with steps starts folded but can be opened', () => {
+    const d = withSteps();
+    const idx = M.buildIndex(d.root);
+    const t2 = idx.byId.get('t2')!;
+    expect(M.isDone(idx, t2)).toBe(true);
+    expect(isFolded(t2, idx, {})).toBe(true);
+    const vis = visibleTree(d.root, idx, { hideDone: false, openStacks: new Set(['p1']), openDone: new Set(['t2']) });
+    expect(vis.kids.get('t2')!.map((k) => k.id)).toEqual([stackId('t2')]);
+  });
+  it('a user-collapsed item stays folded even when opened as done', () => {
+    const d = withSteps();
+    d.root.children[0].children[1].collapsed = true;
+    const idx = M.buildIndex(d.root);
+    expect(isFolded(idx.byId.get('t2')!, idx, { openDone: new Set(['t2']) })).toBe(true);
+  });
+});
+
+describe('complete projects stay in the tree (KAN-34)', () => {
+  // P1 complete: t1, t2, t3 done. A third project P3 sits after P2, so P1 is not the last sibling.
+  const setup = () => {
+    const d = M.toggleDone(doc(), 't2')!.doc;
+    d.root.children.push({ id: 'p3', type: 'project', title: 'P3', done: false, collapsed: false, children: [
+      { id: 't5', type: 'todo', title: 'e', done: true, collapsed: false, children: [] },
+    ] });
     return d;
   };
-  it('a finished project starts folded but can be opened', () => {
-    const d = allDone();
+  it('is complete but not done', () => {
+    const d = setup();
     const idx = M.buildIndex(d.root);
-    const p1 = d.root.children[0];
-    expect(M.isComplete(idx, p1)).toBe(true);
-    expect(isFolded(p1, idx, {})).toBe(true);
-    const vis = visibleTree(d.root, idx, { hideDone: false, openStacks: new Set(), openDone: new Set(['p1']) });
+    expect(M.isComplete(idx, idx.byId.get('p1')!)).toBe(true);
+    expect(M.isDone(idx, idx.byId.get('p1')!)).toBe(false);
+  });
+  it('keeps its saved position and is never stacked, even next to another complete project', () => {
+    const d = setup();
+    const idx = M.buildIndex(d.root);
+    const vis = visibleTree(d.root, idx, { hideDone: false, openStacks: new Set() });
+    expect(vis.kids.get('root')!.map((k) => k.id)).toEqual(['p1', 'p2', 'p3']);
+  });
+  it('is not folded automatically; its done todos still sink and stack inside it', () => {
+    const d = setup();
+    const idx = M.buildIndex(d.root);
+    expect(isFolded(idx.byId.get('p1')!, idx, {})).toBe(false);
+    const vis = visibleTree(d.root, idx, { hideDone: false, openStacks: new Set() });
     expect(vis.kids.get('p1')!.map((k) => k.id)).toEqual(['n1', stackId('p1')]);
   });
-  it('a user-collapsed item stays folded even when opened as finished', () => {
-    const d = allDone();
-    d.root.children[0].collapsed = true;
-    expect(isFolded(d.root.children[0], M.buildIndex(d.root), { openDone: new Set(['p1']) })).toBe(true);
+  it('stays visible with Hide done; only the done todos under it are hidden', () => {
+    const d = setup();
+    const idx = M.buildIndex(d.root);
+    const vis = visibleTree(d.root, idx, { hideDone: true, openStacks: new Set() });
+    expect(vis.kids.get('root')!.map((k) => k.id)).toEqual(['p1', 'p2', 'p3']);
+    expect(vis.kids.get('p1')!.map((k) => k.id)).toEqual(['n1']);
+    expect(vis.kids.get('p3')).toEqual([]);
+  });
+  it('opens again when a todo is added', () => {
+    const r = M.addChild(setup(), 'p1', 'todo');
+    const idx = M.buildIndex(r!.doc.root);
+    expect(M.isComplete(idx, idx.byId.get('p1')!)).toBe(false);
+    expect(idx.stats.get('p1')).toEqual({ total: 4, done: 3 });
+  });
+  it('a project without todos is empty, not complete', () => {
+    const d = doc();
+    d.root.children[1].children = [{ id: 'n9', type: 'note', title: 'x', done: false, collapsed: false, children: [] }];
+    const idx = M.buildIndex(d.root);
+    expect(M.isComplete(idx, idx.byId.get('p2')!)).toBe(false);
+  });
+  it('moving up/down treats a complete project like any open sibling', () => {
+    const d = setup();
+    const r = M.moveSibling(d, 'p2', -1)!;
+    expect(r.doc.root.children.map((c) => c.id)).toEqual(['p2', 'p1', 'p3']);
+  });
+  it('shows no deadline warning on folded branches and is never matched by filters', () => {
+    const d = setup();
+    d.root.children[0].due = '2026-10-14';
+    const idx = M.buildIndex(d.root);
+    expect(M.worstDueBelow(d.root, idx, '2026-10-13')).toBeNull();
+    const f = applyFilters(d.root, idx, { high: false, dueSoon: true }, '2026-10-13');
+    expect(f!.matches).toBe(0);
   });
 });
 

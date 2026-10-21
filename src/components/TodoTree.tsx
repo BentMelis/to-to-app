@@ -321,7 +321,7 @@ function TreeCanvas({
         else {
           const weight = Math.max(1, idx.stats.get(c.id)!.total);
           w = (1.4 + Math.min(3.6, Math.log2(weight) * 1.1)).toFixed(2);
-          if (M.isComplete(idx, c.node)) cls = 'done';
+          if (M.isDone(idx, c.node)) cls = 'done';
         }
         if (isDim(c)) cls += ' dim';
         paths += `<path class="${cls}" stroke-width="${w}" d="M${sx} ${sy}C${mx} ${sy},${mx} ${ey},${ex} ${ey}"/>`;
@@ -498,14 +498,14 @@ function TreeCanvas({
     }
   }
 
-  /** Open or close an item's branch. Finished items open in the view only; others fold in the saved tree. */
+  /** Open or close an item's branch. Done todos open in the view only; others fold in the saved tree. */
   function fold(id: string, open?: boolean) {
     const n = idx.byId.get(id);
     if (!n || !n.children.length) return;
     const folded = isFolded(n, idx, { openDone });
     const wantOpen = open ?? folded;
     if (wantOpen === folded) {
-      const finished = n.id !== 'root' && M.isComplete(idx, n);
+      const finished = M.isDone(idx, n);
       if (wantOpen) {
         if (finished) setOpenDone((s) => new Set(s).add(id));
         if (n.collapsed) apply(M.toggleFold(doc, id, false));
@@ -595,11 +595,11 @@ function TreeCanvas({
     if (!n) return;
     const r = M.unfoldTo(doc, id);
     if (r) store.commit(r.doc);
-    // Open any finished ancestors and the stacks they sit in.
+    // Open any done ancestors and the stacks they sit in (complete projects are never folded or stacked).
     const stacks: string[] = [];
     const done: string[] = [];
     for (let c: TreeNode | null = n; c && c.type !== 'root'; c = idx.parentOf.get(c.id) ?? null) {
-      if (!M.isComplete(idx, c)) continue;
+      if (!M.isDone(idx, c)) continue;
       if (c !== n) done.push(c.id);
       const p = idx.parentOf.get(c.id);
       if (p) stacks.push(p.id);
@@ -658,7 +658,7 @@ function TreeCanvas({
   const openStack = (parentId: string) => {
     const p = idx.byId.get(parentId);
     setOpenStacks((s) => new Set(s).add(parentId));
-    const first = p?.children.find((c) => M.isComplete(idx, c));
+    const first = p?.children.find((c) => M.isDone(idx, c));
     if (first) setSel(first.id);
   };
   const closeStack = (parentId: string) => {
@@ -1445,7 +1445,7 @@ function TreeCanvas({
                   {M.isComplete(idx, selNode) ? 'Not done' : 'Done'} <kbd>Space</kbd>
                 </button>
               )}
-              {selParent && openStacks.has(selParent.id) && M.isComplete(idx, selNode) && (
+              {selParent && openStacks.has(selParent.id) && M.isDone(idx, selNode) && (
                 <button className="tb" onClick={() => closeStack(selParent.id)}>
                   Stack done <kbd>S</kbd>
                 </button>

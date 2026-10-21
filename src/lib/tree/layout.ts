@@ -1,4 +1,4 @@
-import { isComplete, type TreeIndex } from './model';
+import { isComplete, isDone, type TreeIndex } from './model';
 import { daysUntil, dueLevel } from './dates';
 import type { TreeNode } from './types';
 
@@ -14,9 +14,9 @@ export type VisItem =
 
 export interface ViewOptions {
   hideDone: boolean;
-  /** Parents whose finished children are shown individually instead of as a stack. */
+  /** Parents whose done todos are shown individually instead of as a stack. */
   openStacks: Set<string>;
-  /** Finished items the user unfolded to look inside (finished items start folded). */
+  /** Done todos the user unfolded to look inside (done todos with steps start folded). */
   openDone?: Set<string>;
   /** When set, only these items are shown (see `applyFilters`). */
   filter?: FilterResult | null;
@@ -81,27 +81,27 @@ export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: 
 }
 
 /**
- * Whether an item's children are hidden: folded by the user, or finished and not opened.
- * A finished item always has to be openable, otherwise ticking the last todo of a project
- * would lock its contents away.
+ * Whether an item's children are hidden: folded by the user, or a done todo that wasn't opened.
+ * A done todo always has to be openable, otherwise ticking its last step would lock its contents away.
+ * Complete projects are never folded automatically (KAN-34): they keep their saved fold state.
  */
 export function isFolded(n: TreeNode, idx: TreeIndex, opts: Pick<ViewOptions, 'openDone'>) {
   if (!n.children.length) return false;
   if (n.collapsed) return true;
-  return n.id !== 'root' && isComplete(idx, n) && !opts.openDone?.has(n.id);
+  return isDone(idx, n) && !opts.openDone?.has(n.id);
 }
 
 export const stackId = (parentId: string) => `stack:${parentId}`;
 export const isStackId = (id: string | null | undefined): id is string => !!id && id.startsWith('stack:');
 
-/** Children in display order: open items keep their order, finished ones sink to the bottom. */
+/** Children in display order: everything keeps its order, done todos sink to the bottom (complete projects don't). */
 export function displayChildren(n: TreeNode, idx: TreeIndex, opts: ViewOptions, depth: number): VisItem[] {
   if (n.collapsed && !opts.filter?.context.has(n.id)) return [];
   const open: TreeNode[] = [];
   const done: TreeNode[] = [];
   for (const c of n.children) {
     if (opts.filter && !opts.filter.show.has(c.id)) continue;
-    (isComplete(idx, c) ? done : open).push(c);
+    (isDone(idx, c) ? done : open).push(c);
   }
   const items: VisItem[] = open.map((c) => ({ kind: 'node', id: c.id, node: c, depth, parentId: n.id }));
   if (opts.hideDone || !done.length) return items;

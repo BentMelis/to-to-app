@@ -180,6 +180,14 @@ export const isComplete = (idx: TreeIndex, n: TreeNode) => {
   return !!s && s.total > 0 && s.done === s.total;
 };
 
+/**
+ * Done: a finished todo (including a todo whose steps are all done). Done items step back: greyed, sunk,
+ * stacked, folded and hidden by "Hide done". A project is never *done*, only *complete* (all its todos
+ * are done right now); it keeps its place and look so new work can be added to it (KAN-34).
+ * `isComplete` still decides progress, deadline warnings, filters and the idle heads-up.
+ */
+export const isDone = (idx: TreeIndex, n: TreeNode) => n.type === 'todo' && isComplete(idx, n);
+
 export const countDesc = (n: TreeNode): number => n.children.reduce((a, c) => a + 1 + countDesc(c), 0);
 
 export const allows = (n: TreeNode, type: NodeType) => (TYPES[n.type].allows as NodeType[]).includes(type);
@@ -308,18 +316,18 @@ export function changeType(doc: TreeDoc, id: string, type: ChildType) {
 }
 
 /**
- * Move up/down among siblings. Finished items are shown stacked after open ones, so we swap with the
- * nearest sibling in the same group (open or finished) to match what the user sees.
+ * Move up/down among siblings. Done todos are shown stacked after the rest, so we swap with the
+ * nearest sibling in the same group (done or not) to match what the user sees.
  */
 export function moveSibling(doc: TreeDoc, id: string, dir: -1 | 1) {
   const { doc: d, idx } = draft(doc);
   const n = idx.byId.get(id);
   const p = idx.parentOf.get(id);
   if (!n || !p) return null;
-  const group = isComplete(idx, n);
+  const group = isDone(idx, n);
   const i = p.children.indexOf(n);
   let j = i + dir;
-  while (j >= 0 && j < p.children.length && isComplete(idx, p.children[j]) !== group) j += dir;
+  while (j >= 0 && j < p.children.length && isDone(idx, p.children[j]) !== group) j += dir;
   if (j < 0 || j >= p.children.length) return null;
   [p.children[i], p.children[j]] = [p.children[j], p.children[i]];
   return { doc: d };

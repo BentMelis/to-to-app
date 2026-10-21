@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useEffect, useRef, useState } from 'react';
-import { countDesc, isComplete, worstDueBelow, type TreeIndex } from '@/lib/tree/model';
+import { countDesc, isComplete, isDone, worstDueBelow, type TreeIndex } from '@/lib/tree/model';
 import { daysUntil, describeDue, dueLevel, formatDue } from '@/lib/tree/dates';
 import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
@@ -110,7 +110,8 @@ function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editi
     hasKids && 'has-kids',
     type === 'project' && parent?.type === 'project' && 'nested',
     comp && 'complete',
-    comp && !isRoot && 'finished',
+    // Only done todos step back; a complete project keeps its normal look (KAN-34).
+    isDone(idx, n) && 'finished',
     selected && 'selected',
     dim && 'dim',
     context && 'context',
@@ -199,7 +200,13 @@ function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editi
             {showProgress && (
               <>
                 <span className="count">
-                  {s.total === 0 ? (hasKids ? 'No todos yet' : 'Empty') : isRoot ? `${s.done} of ${s.total} done` : `${s.done}/${s.total}`}
+                  {s.total === 0
+                    ? hasKids ? 'No todos yet' : 'Empty'
+                    : isRoot
+                      ? `${s.done} of ${s.total} done`
+                      : comp && type === 'project'
+                        ? `All done · ${s.done} done`
+                        : `${s.done}/${s.total}`}
                 </span>
                 {s.total > 0 && (
                   <span className="bar">

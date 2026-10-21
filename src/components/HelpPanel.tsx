@@ -47,7 +47,7 @@ export function HelpPanel() {
           ))}
         </tbody>
       </table>
-      <p>Finished items turn grey and stack up at the bottom of their branch. Click a stack to look through it.</p>
+      <p>Finished todos turn grey and stack up at the bottom of their branch. Click a stack to look through it. A project whose todos are all done keeps its place and shows <b>All done</b>, so you can add the next todo right away.</p>
       <p>Deadlines turn <span className="due-chip soon">orange</span> when 3 days or fewer are left and <span className="due-chip urgent">red</span> from the last day on, including overdue. High-priority items get a <span className="prio-badge" aria-hidden="true">!</span>.</p>
       <p>Projects and todos that nothing has happened to for a while (7 days by default) get a quiet <span className="idle-chip">idle</span> tag and a dashed border. Any change to the item or anything inside it counts as activity; folding doesn’t. Change the number of days, or turn it off, under <b>Filter</b>.</p>
       <p>Use <b>Filter</b> to show only high-priority, soon-due or idle items. The projects above them stay visible, faded, so you know where they live.</p>

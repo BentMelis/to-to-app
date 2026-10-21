@@ -61,7 +61,7 @@ button { font: inherit; color: inherit; }
 .node.note { background: var(--note); border: 1.5px dashed var(--note-edge); border-radius: 3px; padding: 8px 14px; max-width: 240px; }
 .node.root { background: transparent; border: none; padding: 4px 18px 4px 2px; }
 .node.selected { outline: 2.5px solid var(--focus); outline-offset: 3px; }
-.node.complete.project, .node.complete.todo { border-color: var(--leaf); }
+.node.complete.todo { border-color: var(--leaf); }
 .body { min-width: 0; }
 .title { display: block; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; min-width: 2ch; }
 .todo.has-kids .title { font-weight: 700; }

@@ -29,7 +29,7 @@ npm run dev        # http://localhost:3000
 | --- | --- |
 | `/` | Landing page (`src/components/landing/`). Returning visitors see "Open your trees"; the installed app skips it |
 | `/app` | The app itself (`TreesApp`). The PWA starts here |
-| `/robots.txt`, `/sitemap.xml` | Generated from `src/app/robots.ts` and `sitemap.ts` |
+| `/robots.txt`, `/sitemap.xml` | Generated from `src/app/robots.ts` and `sitemap.ts`. Only `/` is listed; `/app` is disallowed (nothing to index) |
 
 The name, domain and description live in `src/lib/site.ts` (`NEXT_PUBLIC_SITE_URL` overrides the domain for previews);
 titles, the install manifest, canonical URLs and social previews read from there.
@@ -43,6 +43,10 @@ titles, the install manifest, canonical URLs and social previews read from there
   camera to centre it. Toggle with the **Focus** button.
 - **Finished items** — turn grey, sink to the bottom of their branch, and two or more stack into a single card.
   Click the stack (or `Enter`) to look through them; they restack when you move away, or press `S`.
+- **Complete projects stay in the tree** (KAN-34) — a project whose todos are all done is *complete*, not *done*:
+  it keeps its position, look and fold state, shows a full ring and “All done · N done”, is never stacked and stays
+  visible with *Hide done*. Only todos (`isDone` in `model.ts`) step back. Complete still means no deadline warnings,
+  no filter matches and no idle heads-up.
 - **Meetings & people** — press `Q` (or *Bring up…*) to flag an item for a meeting or a person: **ask** a question
   (solid `?` tag) or just **mention** it, e.g. "this is done" (outlined megaphone tag). Each meeting/person has its own
   colour; manage them under **Meetings → Edit** (up to 9: standup, weekly sync, a stakeholder…). The **Meetings** panel
