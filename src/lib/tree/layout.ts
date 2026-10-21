@@ -20,6 +20,8 @@ export interface ViewOptions {
   openDone?: Set<string>;
   /** When set, only these items are shown (see `applyFilters`). */
   filter?: FilterResult | null;
+  /** Sensitive items (and what's inside them) while hidden: shown as a locked placeholder, never opened. */
+  sealed?: ReadonlySet<string>;
 }
 
 /* ---------- Filters ---------- */
@@ -52,7 +54,7 @@ export function matchesFilters(n: TreeNode, idx: TreeIndex, f: Filters, today: s
   return false;
 }
 
-export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: string, idle?: Map<string, number>): FilterResult | null {
+export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: string, idle?: Map<string, number>, sealed?: ReadonlySet<string>): FilterResult | null {
   if (!anyFilter(f)) return null;
   const show = new Set<string>(['root']);
   const context = new Set<string>(['root']);
@@ -62,6 +64,8 @@ export function applyFilters(root: TreeNode, idx: TreeIndex, f: Filters, today: 
     n.children.forEach(addAll);
   };
   const walk = (n: TreeNode) => {
+    // Hidden sensitive branches never match: a filter must not reveal what's inside them.
+    if (sealed?.has(n.id)) return;
     if (matchesFilters(n, idx, f, today, idle)) {
       matches++;
       addAll(n);
@@ -122,7 +126,7 @@ export function visibleTree(root: TreeNode, idx: TreeIndex, opts: ViewOptions): 
     if (it.kind !== 'node') return;
     // Finished items start folded; their fold button opens them like any other branch.
     // A filter keeps the path to its matches open, even through folded branches.
-    const folded = !opts.filter?.context.has(it.id) && isFolded(it.node, idx, opts);
+    const folded = !!opts.sealed?.has(it.id) || (!opts.filter?.context.has(it.id) && isFolded(it.node, idx, opts));
     const ks = folded ? [] : displayChildren(it.node, idx, opts, it.depth + 1);
     kids.set(it.id, ks);
     ks.forEach(walk);

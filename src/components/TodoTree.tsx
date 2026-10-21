@@ -6,6 +6,7 @@ import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
 import { MoveMenu } from './MoveMenu';
+import { loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -106,6 +107,14 @@ function TreeCanvas({
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [moveMenu, setMoveMenu] = useState<string | null>(null);
+  // KAN-20: hide sensitive items, e.g. while screen-sharing. Remembered per browser, for every tree.
+  const [hideSensitive, setHideSensitiveRaw] = useState(loadHideSensitive);
+  const setHideSensitive = (on: boolean) => {
+    setHideSensitiveRaw(on);
+    saveHideSensitive(on);
+    track('sensitive_view_toggled', { hidden: on });
+    showToast(on ? 'Sensitive items hidden' : 'Sensitive items visible');
+  };
   const [manageMeetings, setManageMeetings] = useState(false);
   // Last meeting tab looked at (a viewing preference, remembered per browser).
   const [activeMeeting, setActiveMeetingRaw] = useState<string | null>(() => prefs.get<string>('meeting', treeId));
@@ -117,13 +126,24 @@ function TreeCanvas({
   const [, setTick] = useState(0);
 
   const idx = useMemo(() => M.buildIndex(doc.root), [doc]);
-  const flaggedCount = useMemo(() => M.countFlagged(doc.root), [doc]);
+  /** Sensitive items and everything inside them, while hidden. */
+  const sealed = useMemo(() => (hideSensitive ? sealedIds(doc.root) : NONE), [hideSensitive, doc]);
+  const flagsFor = (meetingId: string) => M.collectFlags(doc.root, idx, meetingId).filter((f) => !sealed.has(f.id));
+  const flaggedCount = useMemo(() => {
+    let c = 0;
+    for (const n of idx.byId.values()) if (n.flags && Object.keys(n.flags).length && !sealed.has(n.id)) c++;
+    return c;
+  }, [idx, sealed]);
   // Filters are remembered per tree, per browser (a viewing preference, not part of the tree).
   const [filters, setFiltersRaw] = useState<Filters>(() => ({ ...NO_FILTERS, ...prefs.get<Filters>('filters', treeId) }));
   const [filterMenu, setFilterMenu] = useState<DOMRect | null>(null);
   // Idle heads-up: re-evaluated whenever the tree changes, and every minute via `today`/`clock`.
   const idleDays = M.idleDaysOf(doc);
-  const idle = useMemo(() => idleItems(doc.root, idx, idleDays, clock), [doc, idx, idleDays, clock]);
+  const idle = useMemo(() => {
+    const m = idleItems(doc.root, idx, idleDays, clock);
+    for (const id of sealed) m.delete(id);
+    return m;
+  }, [doc, idx, idleDays, clock, sealed]);
   const activity = useMemo(() => lastActivity(doc.root), [doc]);
   /** Items with an idle item somewhere below them (hint on folded branches). */
   const idleAbove = useMemo(() => {
@@ -131,18 +151,19 @@ function TreeCanvas({
     for (const id of idle.keys()) for (let p = idx.parentOf.get(id); p; p = idx.parentOf.get(p.id) ?? null) out.add(p.id);
     return out;
   }, [idle, idx]);
-  const filter = useMemo(() => applyFilters(doc.root, idx, filters, today, idle), [doc, idx, filters, today, idle]);
+  const filter = useMemo(() => applyFilters(doc.root, idx, filters, today, idle, sealed), [doc, idx, filters, today, idle, sealed]);
   const filterCounts = useMemo(() => {
     const c = { high: 0, dueSoon: 0, idle: idle.size };
     for (const n of idx.byId.values()) {
+      if (sealed.has(n.id)) continue;
       if (matchesFilters(n, idx, { high: true, dueSoon: false }, today)) c.high++;
       if (matchesFilters(n, idx, { high: false, dueSoon: true }, today)) c.dueSoon++;
     }
     return c;
-  }, [idx, today, idle]);
+  }, [idx, today, idle, sealed]);
   const vis = useMemo(
-    () => visibleTree(doc.root, idx, { hideDone, openStacks, openDone, filter }),
-    [doc, idx, hideDone, openStacks, openDone, filter],
+    () => visibleTree(doc.root, idx, { hideDone, openStacks, openDone, filter, sealed }),
+    [doc, idx, hideDone, openStacks, openDone, filter, sealed],
   );
 
   // A selection that disappeared (deleted, hidden, folded away) falls back to its nearest visible ancestor.
@@ -501,10 +522,18 @@ function TreeCanvas({
 
   function openNotes(id: string) {
     const n = idx.byId.get(id);
-    if (!n || !canHaveNotes(n.type)) return;
+    if (!n || !canHaveNotes(n.type) || sealed.has(id)) return;
     setSel(id);
     setNotesFor(id);
     track('notes_opened');
+  }
+
+  function toggleSensitive(id: string) {
+    const r = M.toggleSensitive(doc, id);
+    if (!r) return;
+    store.commit(r.doc);
+    track('sensitive_marked', { on: r.sensitive });
+    if (r.sensitive && !hideSensitive) showToast('Marked as sensitive. Shift+H hides it, with everything inside.');
   }
 
   /** Move an item and everything inside it to another tree (KAN-23). One undo step here; the toast undoes both trees. */
@@ -617,7 +646,7 @@ function TreeCanvas({
   async function copyMeeting(meetingId: string) {
     const m = doc.meetings.find((x) => x.id === meetingId);
     if (!m) return;
-    const items = M.collectFlags(doc.root, idx, meetingId);
+    const items = flagsFor(meetingId);
     try {
       await navigator.clipboard.writeText(M.meetingAsText(m, items));
       showToast(`Copied ${items.length} item${items.length === 1 ? '' : 's'} for ${m.name}`);
@@ -653,9 +682,9 @@ function TreeCanvas({
   }
 
   /* ---------- Pointer: pan, pinch, wheel zoom, drag & drop ---------- */
-  const latest = useRef({ doc, idx, vis, editing, store, showToast, setSel });
+  const latest = useRef({ doc, idx, vis, editing, store, showToast, setSel, sealed });
   useLayoutEffect(() => {
-    latest.current = { doc, idx, vis, editing, store, showToast, setSel };
+    latest.current = { doc, idx, vis, editing, store, showToast, setSel, sealed };
   });
   const suppressClick = useRef(false);
 
@@ -714,7 +743,7 @@ function TreeCanvas({
     function beginDrag(x: number, y: number) {
       if (!cand) return;
       const n = latest.current.idx.byId.get(cand.id);
-      if (!n) return;
+      if (!n || latest.current.sealed.has(n.id)) return;
       pts.clear();
       panStart = null;
       pinch = null;
@@ -927,6 +956,10 @@ function TreeCanvas({
       openStack(id.slice(6));
       return focusCanvas();
     }
+    if (sealed.has(id)) {
+      setSel(id);
+      return focusCanvas();
+    }
     const act = t.closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'check') toggleDone(id);
     else if (act === 'fold') fold(id);
@@ -995,12 +1028,18 @@ function TreeCanvas({
     }
     if (mod) return;
     if (key === 'Escape' && panel) return setPanel(null);
+    if (key === 'H' && e.shiftKey && !e.altKey) {
+      e.preventDefault();
+      return setHideSensitive(!hideSensitive);
+    }
     if (!(t === vpRef.current || t === document.body)) return;
     if (!selId && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) {
       e.preventDefault();
       return setSel('root');
     }
     const id = selId;
+    // A hidden sensitive item can only be navigated past.
+    if (id && sealed.has(id) && !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Escape', 'f', 'F', 'w', 'W', '?'].includes(key)) return;
     // A stack only opens, or is navigated past.
     if (id && isStackId(id)) {
       if (['Enter', ' ', 'ArrowRight', 's', 'S'].includes(key)) {
@@ -1068,6 +1107,13 @@ function TreeCanvas({
         if (id && id !== 'root') {
           e.preventDefault();
           openFlagMenu(id);
+        }
+        break;
+      case 'l':
+      case 'L':
+        if (id && id !== 'root') {
+          e.preventDefault();
+          toggleSensitive(id);
         }
         break;
       case 'm':
@@ -1166,14 +1212,14 @@ function TreeCanvas({
       <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Todo tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('.node');
         const id = el?.dataset.id;
-        if (id && !isStackId(id) && !(e.target as HTMLElement).closest('button')) setEditing({ id, isNew: false });
+        if (id && !isStackId(id) && !sealed.has(id) && !(e.target as HTMLElement).closest('button')) setEditing({ id, isNew: false });
       }}>
         <div id="canvas" ref={canvasRef}>
           <svg id="links" ref={linksRef} aria-hidden="true" />
           <div className="drop-line" ref={dropLineRef} hidden />
           {vis.items.map((it) =>
             it.kind === 'stack' ? (
-              <StackView key={it.id} id={it.id} items={it.items} selected={selId === it.id} dim={isDim(it)} meetings={doc.meetings} register={register} />
+              <StackView key={it.id} id={it.id} items={it.items} selected={selId === it.id} dim={isDim(it)} meetings={doc.meetings} sealed={sealed} register={register} />
             ) : (
               <TreeNodeView
                 key={it.id}
@@ -1187,6 +1233,8 @@ function TreeCanvas({
                 idleDays={idle.get(it.id)}
                 idleSince={activity.get(it.id)}
                 idleInside={idleAbove.has(it.id)}
+                sealed={sealed.has(it.id)}
+                sealedSet={sealed}
                 editing={editing?.id === it.id ? editing : null}
                 meetings={doc.meetings}
                 folded={!filter?.context.has(it.id) && isFolded(it.node, idx, { openDone })}
@@ -1203,6 +1251,8 @@ function TreeCanvas({
         ref={topbarRef}
         treeName={treeName}
         treeMenuOpen={treeMenuOpen}
+        hideSensitive={hideSensitive}
+        onHideSensitive={() => setHideSensitive(!hideSensitive)}
         onTreeMenu={onTreeMenu}
         hideDone={hideDone}
         focusMode={focusMode}
@@ -1212,7 +1262,7 @@ function TreeCanvas({
         helpOpen={help}
         meetingsOpen={panel === 'meetings'}
         flaggedCount={flaggedCount}
-        meetingDots={doc.meetings.map((m) => ({ id: m.id, name: m.name, color: m.color, count: M.collectFlags(doc.root, idx, m.id).length })).filter((m) => m.count > 0)}
+        meetingDots={doc.meetings.map((m) => ({ id: m.id, name: m.name, color: m.color, count: flagsFor(m.id).length })).filter((m) => m.count > 0)}
         onMeetings={() => setPanel((p) => (p === 'meetings' ? null : 'meetings'))}
         onAdd={(anchor) => setPicker({ forId: 'root', mode: 'add', anchor })}
         onHideDone={() => setHideDone((v) => !v)}
@@ -1282,7 +1332,7 @@ function TreeCanvas({
       {panel === 'meetings' && (
         <MeetingsPanel
           meetings={doc.meetings}
-          itemsFor={(mid) => M.collectFlags(doc.root, idx, mid)}
+          itemsFor={flagsFor}
           active={activeMeeting}
           onActive={setActiveMeeting}
           selectedId={selId}
@@ -1374,6 +1424,10 @@ function TreeCanvas({
             <button className="tb" onClick={() => openStack(selId.slice(6))}>
               Show done <kbd>Enter</kbd>
             </button>
+          ) : selNode && sealed.has(selNode.id) ? (
+            <span className="sealed-note">
+              Sensitive item, hidden · <kbd>Shift</kbd>+<kbd>H</kbd> to show
+            </span>
           ) : selNode ? (
             <>
               {TYPES[selNode.type].allows.length > 0 && (
@@ -1414,6 +1468,11 @@ function TreeCanvas({
               {selNode.type !== 'root' && (
                 <button className={'tb' + (selNode.flags ? ' asked' : '')} onClick={() => openFlagMenu(selNode.id)}>
                   {selNode.flags ? `Bring up (${Object.keys(selNode.flags).length})` : 'Bring up…'} <kbd>Q</kbd>
+                </button>
+              )}
+              {selNode.type !== 'root' && (
+                <button className="tb" aria-pressed={!!selNode.sensitive} onClick={() => toggleSensitive(selNode.id)}>
+                  Sensitive <kbd>L</kbd>
                 </button>
               )}
               {selNode.type !== 'root' && otherTrees.length > 0 && (

@@ -108,6 +108,7 @@ function normalize(raw: unknown, depth: number, plainNotes = false): TreeNode {
     collapsed: !!n.collapsed,
     ...(depth > 0 ? readFlags(n) : {}),
     ...(n.high && canSchedule(type) ? { high: true } : {}),
+    ...(n.sensitive && depth > 0 ? { sensitive: true } : {}),
     ...(typeof n.due === 'string' && DUE_RE.test(n.due) && canSchedule(type) ? { due: n.due } : {}),
     // Kept even if the type changes, so turning a project into a note and back loses nothing.
     // Before v4, notes were plain text; now they're Markdown.
@@ -486,6 +487,16 @@ export function toggleHigh(doc: TreeDoc, id: string) {
   return { doc: d, high: !!n.high };
 }
 
+/** Mark or unmark an item as sensitive (KAN-20). */
+export function toggleSensitive(doc: TreeDoc, id: string) {
+  const { doc: d, idx } = draft(doc);
+  const n = idx.byId.get(id);
+  if (!n || n.type === 'root') return null;
+  if (n.sensitive) delete n.sensitive;
+  else n.sensitive = true;
+  return { doc: d, sensitive: !!n.sensitive };
+}
+
 /** Set or clear (`null`) a deadline. */
 export function setDue(doc: TreeDoc, id: string, due: string | null) {
   const { doc: d, idx } = draft(doc);
@@ -501,9 +512,10 @@ export function setDue(doc: TreeDoc, id: string, due: string | null) {
 const RANK: Record<DueLevel, number> = { later: 0, soon: 1, urgent: 2 };
 
 /** The most pressing deadline among unfinished items below `n` (for hints on folded branches). */
-export function worstDueBelow(n: TreeNode, idx: TreeIndex, today: string): DueLevel | null {
+export function worstDueBelow(n: TreeNode, idx: TreeIndex, today: string, skip?: ReadonlySet<string>): DueLevel | null {
   let worst: DueLevel | null = null;
   const walk = (c: TreeNode) => {
+    if (skip?.has(c.id)) return;
     if (c.due && !isComplete(idx, c)) {
       const lvl = dueLevel(daysUntil(c.due, today));
       if (!worst || RANK[lvl] > RANK[worst]) worst = lvl;

@@ -507,3 +507,18 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 .move-confirm { padding: 6px 8px 2px; }
 .move-confirm p { margin: 0 0 4px; font-size: 14.5px; line-height: 1.45; }
 .toast button + button { margin-left: -4px; }
+
+/* ---------- Sensitive items (KAN-20) ---------- */
+.sensitive-badge { flex: none; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--chip); color: var(--muted); }
+.sensitive-badge svg { width: 12px; height: 12px; }
+.node.sealed { cursor: default; border-style: dashed; border-color: var(--edge); background: repeating-linear-gradient(135deg, var(--surface) 0 8px, color-mix(in srgb, var(--chip) 60%, var(--surface)) 8px 16px); }
+.node.project.sealed { border-width: 2px; border-color: color-mix(in srgb, var(--ink) 40%, var(--edge)); }
+.sealed-lock { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); color: var(--paper); }
+.sealed-lock svg { width: 12px; height: 12px; }
+.sealed-bar { display: block; width: 110px; height: 11px; border-radius: 6px; background: color-mix(in srgb, var(--muted) 45%, transparent); filter: blur(2px); }
+.sealed-bar::before { content: none !important; }
+.node.stack .sealed-bar { width: 90px; }
+.sealed-note { padding: 0 10px; font-size: 13.5px; color: var(--muted); display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.tb.sensitive-toggle.on { background: var(--ink); color: var(--paper); box-shadow: none; }
+.tb.sensitive-toggle.on:hover { background: var(--ink); opacity: .9; }
+@media (max-width: 640px) { .sensitive-toggle .tb-label { display: none; } }

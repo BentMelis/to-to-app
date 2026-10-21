@@ -102,7 +102,9 @@ export type AppEvent =
   | 'filter_used'
   | 'backup_downloaded'
   | 'backup_restored'
-  | 'item_moved_to_tree';
+  | 'item_moved_to_tree'
+  | 'sensitive_marked'
+  | 'sensitive_view_toggled';
 
 export function track(event: AppEvent, params?: Record<string, string | number | boolean>) {
   if (!loaded || typeof window === 'undefined' || !window.gtag || getConsent() !== 'granted') return;

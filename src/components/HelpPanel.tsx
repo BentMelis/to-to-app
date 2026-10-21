@@ -19,6 +19,8 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="f">F</kbd>, 'Fit the tree on screen'],
   [<><kbd>W</kbd> then <kbd>1</kbd>–<kbd>9</kbd></>, 'Switch to another tree'],
   [<kbd key="m">M</kbd>, 'Move the selected item (and everything inside it) to another tree'],
+  [<kbd key="l">L</kbd>, 'Mark as sensitive (again to unmark)'],
+  [<><kbd>Shift</kbd> + <kbd>H</kbd></>, 'Hide or show sensitive items, e.g. while sharing your screen'],
   [<><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></>, 'Undo'],
 ];
 
@@ -52,6 +54,7 @@ export function HelpPanel() {
       <p>Projects and todos have <b>notes</b> for longer context: press <kbd>N</kbd> or click the page icon next to the item. Notes can have headings, lists, checklists, quotes, code, links and tables: use the bar at the top, or type <kbd>#</kbd>, <kbd>-</kbd>, <kbd>[ ]</kbd> or <kbd>&gt;</kbd> at the start of a line. Items with notes show a filled icon.</p>
       <p>Press <kbd>Q</kbd> to bring an item up at a meeting or with a person: <b>ask</b> a question, or just <b>mention</b> it (“this is done”). Each meeting has its own colour; set them up under <b>Meetings → Edit</b>. The <b>Meetings</b> list shows per meeting what to ask and what to mention, and copies it as an agenda.</p>
       <p>With Focus on, selecting something fades everything outside its project and centres that project.</p>
+      <p>Mark anything private as <b>sensitive</b> (<kbd>L</kbd>): money, people matters, personal things. Before you share your screen, press <kbd>Shift</kbd>+<kbd>H</kbd> or the eye button: those items, and everything inside them, turn into locked placeholders and are left out of meeting lists, filters and counts. It stays on until you turn it off.</p>
       <p>Drag empty space to move around. Pinch, or hold Ctrl/⌘ and scroll, to zoom.</p>
       <p>
         Everything you write stays in this browser. If you allowed it, we count visits and actions (like creating a tree) with Google Analytics,

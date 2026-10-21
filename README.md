@@ -71,6 +71,11 @@ npm run dev        # http://localhost:3000
   doesn't have are dropped, after a confirmation that names them. The toast offers *Undo* (puts it back in its old
   place and removes it from the other tree) and *Open* (switches there with the item selected). `Ctrl/⌘+Z` alone only
   restores the source tree. Logic in `src/lib/tree/moveTree.ts`.
+- **Sensitive items** (KAN-20) — `L` (or *Sensitive* in the action bar) marks an item; `Shift+H` or the eye button hides
+  every sensitive item and everything inside it, e.g. while sharing your screen. Hidden items render as a locked,
+  blurred placeholder with none of their content in the DOM, can't be opened, edited or dragged, and are left out of
+  meeting lists, the copied agenda, filters, idle markers and the hints on folded branches. The toggle is remembered per
+  browser, for all trees (`todo-tree:hide-sensitive`). Logic in `src/lib/tree/sensitive.ts`.
 - Backup download / restore (.json) of the open tree, self-hosted fonts (works fully offline, nothing sent to Google).
 
 ## Project layout
@@ -128,7 +133,7 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   be changed under *Cookie settings* (landing page footer, and the `?` help panel in the app). Withdrawing removes the `_ga` cookies.
 - **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
   [Todo Tree – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).

@@ -12,6 +12,8 @@ export interface TreeNode {
   flags?: Record<string, FlagKind>;
   /** High priority (todos and projects). */
   high?: boolean;
+  /** Hidden (with everything inside it) while "Hide sensitive" is on, e.g. when screen-sharing. Any item but the root. */
+  sensitive?: boolean;
   /** Deadline as a local calendar date, "YYYY-MM-DD" (todos and projects). */
   due?: string;
   /** Rich notes for projects and todos, as Markdown (GFM). */

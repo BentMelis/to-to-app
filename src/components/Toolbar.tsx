@@ -3,7 +3,7 @@
 import { forwardRef } from 'react';
 import type { SaveStatus } from '@/lib/tree/useTreeStore';
 import { anyFilter, type Filters } from '@/lib/tree/layout';
-import { IconChevron, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
+import { IconChevron, IconEye, IconEyeOff, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: '',
@@ -13,6 +13,8 @@ const STATUS: Record<SaveStatus, string> = {
 };
 
 interface Props {
+  hideSensitive: boolean;
+  onHideSensitive: () => void;
   treeName: string;
   treeMenuOpen: boolean;
   onTreeMenu: () => void;
@@ -87,6 +89,15 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
           <IconFilter />
           {filterLabel(p.filters)}
           {anyFilter(p.filters) && <span className="filter-count">{p.filterMatches}</span>}
+        </button>
+        <button
+          className={'tb sensitive-toggle' + (p.hideSensitive ? ' on' : '')}
+          aria-pressed={p.hideSensitive}
+          title={p.hideSensitive ? 'Sensitive items are hidden. Show them (Shift+H)' : 'Hide sensitive items, e.g. while sharing your screen (Shift+H)'}
+          onClick={p.onHideSensitive}
+        >
+          {p.hideSensitive ? <IconEyeOff /> : <IconEye />}
+          <span className="tb-label">{p.hideSensitive ? 'Hidden' : 'Sensitive'}</span>
         </button>
       </div>
       <div className="group">

@@ -8,13 +8,14 @@ import type { Stats } from '@/lib/tree/types';
 import type { Meeting } from '@/lib/tree/types';
 import { FlagBadge, flagLabel } from './FlagBadge';
 import { notesPreview } from '@/lib/tree/notesText';
-import { IconCalendar, IconCheck, IconIdle, IconNotes, IconPlus } from './icons';
+import { IconCalendar, IconCheck, IconIdle, IconLock, IconNotes, IconPlus } from './icons';
 import { describeIdle } from '@/lib/tree/activity';
 
 /** The first meeting (in the user's order) that something inside `nodes` is flagged for, if any. */
-function firstFlagged(nodes: TreeNode[], meetings: Meeting[], deep: boolean): Meeting | null {
+function firstFlagged(nodes: TreeNode[], meetings: Meeting[], deep: boolean, skip?: ReadonlySet<string>): Meeting | null {
   const ids = new Set<string>();
   const walk = (n: TreeNode) => {
+    if (skip?.has(n.id)) return;
     Object.keys(n.flags ?? {}).forEach((k) => ids.add(k));
     if (deep) n.children.forEach(walk);
   };
@@ -44,6 +45,10 @@ interface Props {
   idleSince?: number;
   /** Something below this item is idle (shown as a hint while folded). */
   idleInside?: boolean;
+  /** Sensitive and hidden: render a locked placeholder, nothing of the content. */
+  sealed?: boolean;
+  /** All hidden sensitive items, so hints on folded branches don't give them away. */
+  sealedSet?: ReadonlySet<string>;
   /** The user's meetings & people, in their order (for flag badges). */
   meetings: Meeting[];
   /** Today's date (YYYY-MM-DD); passed in so deadline colours update when the day changes. */
@@ -52,7 +57,37 @@ interface Props {
   onEditEnd: (id: string, e: EditEnd) => void;
 }
 
-function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, idleDays, idleSince, idleInside, register, onEditEnd }: Props) {
+function TreeNodeViewInner(props: Props) {
+  if (props.sealed) return <SealedNode {...props} />;
+  return <OpenNode {...props} />;
+}
+
+/** A hidden sensitive item: same place in the tree, none of its content (not even in the DOM). */
+function SealedNode({ node: n, depth, selected, dim, register }: Props) {
+  const cls = ['node', n.type, 'sealed', selected && 'selected', dim && 'dim'].filter(Boolean).join(' ');
+  return (
+    <div
+      ref={(el) => register(n.id, el)}
+      className={cls}
+      data-id={n.id}
+      id={`n-${n.id}`}
+      role="treeitem"
+      aria-level={depth + 1}
+      aria-selected={selected}
+      aria-label="Sensitive item, hidden"
+      title="Sensitive · Shift+H to show"
+    >
+      <span className="sealed-lock" aria-hidden="true">
+        <IconLock />
+      </span>
+      <div className="body">
+        <span className="title sealed-bar" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
+
+function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, idleDays, idleSince, idleInside, sealedSet, register, onEditEnd }: Props) {
   const type = n.type;
   const isRoot = type === 'root';
   const hasKids = n.children.length > 0;
@@ -63,8 +98,8 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
   const showProgress = isRoot ? hasKids : type === 'project' || (type === 'todo' && s.total > 1);
   const showMeta = showProgress || !!n.due || idleDays !== undefined;
   const due = n.due ? { label: formatDue(n.due, today), level: comp ? 'done' : dueLevel(daysUntil(n.due, today)), text: describeDue(n.due, today) } : null;
-  const hiddenDue = folded ? worstDueBelow(n, idx, today) : null;
-  const hiddenFlag = folded ? firstFlagged(n.children, meetings, true) : null;
+  const hiddenDue = folded ? worstDueBelow(n, idx, today, sealedSet) : null;
+  const hiddenFlag = folded ? firstFlagged(n.children, meetings, true, sealedSet) : null;
   const hiddenAsk = !!hiddenFlag;
   const flags = meetings.filter((m) => n.flags?.[m.id]).map((m) => ({ m, kind: n.flags![m.id] }));
   const pct = s.total ? Math.round((100 * s.done) / s.total) : 0;
@@ -83,6 +118,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
     n.high && 'high',
     idleDays !== undefined && 'idle',
     n.notes && canHaveNotes(type) && 'has-notes',
+    n.sensitive && 'sensitive',
     due && !comp && `due-${due.level}`,
   ]
     .filter(Boolean)
@@ -100,6 +136,7 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
       aria-label={
         (isRoot ? '' : TYPES[type].label + ': ') +
         name +
+        (n.sensitive ? ', sensitive' : '') +
         (n.high ? ', high priority' : '') +
         (due ? ', ' + due.text : '') +
         (idleDays !== undefined ? `, idle for ${idleDays} days` : '') +
@@ -120,6 +157,11 @@ function TreeNodeViewInner({ node: n, depth, idx, stats: s, selected, dim, conte
         </button>
       )}
       {type === 'project' && <span className="ring" aria-hidden="true" style={{ ['--p' as string]: pct }} />}
+      {n.sensitive && (
+        <span className="sensitive-badge" title="Sensitive: hidden when you press Shift+H" aria-hidden="true">
+          <IconLock />
+        </span>
+      )}
       {n.high && (
         <span className="prio-badge" title="High priority" aria-hidden="true">
           !
@@ -258,6 +300,7 @@ export const StackView = memo(function StackView({
   selected,
   dim,
   meetings,
+  sealed,
   register,
 }: {
   id: string;
@@ -265,12 +308,15 @@ export const StackView = memo(function StackView({
   selected: boolean;
   dim: boolean;
   meetings: Meeting[];
+  sealed?: ReadonlySet<string>;
   register: (id: string, el: HTMLElement | null) => void;
 }) {
-  const top = items[0];
+  const isSealed = (i: TreeNode) => !!sealed?.has(i.id);
+  const top = items.find((i) => !isSealed(i));
+  const titleOf = (i: TreeNode) => (isSealed(i) ? 'sensitive item' : i.title || 'Untitled');
   const label = `${items.length} done`;
-  const asks = items.filter((i) => i.flags && Object.keys(i.flags).length > 0).length;
-  const flagColor = firstFlagged(items, meetings, false)?.color;
+  const asks = items.filter((i) => !isSealed(i) && i.flags && Object.keys(i.flags).length > 0).length;
+  const flagColor = firstFlagged(items, meetings, false, sealed)?.color;
   return (
     <div
       ref={(el) => register(id, el)}
@@ -280,7 +326,7 @@ export const StackView = memo(function StackView({
       role="treeitem"
       aria-selected={selected}
       aria-expanded={false}
-      aria-label={`${label}: ${items.map((i) => i.title || 'Untitled').join(', ')}. Press Enter to show them.`}
+      aria-label={`${label}: ${items.map(titleOf).join(', ')}. Press Enter to show them.`}
       title="Show finished items"
     >
       <span className="stack-layer l2" aria-hidden="true" />
@@ -289,7 +335,7 @@ export const StackView = memo(function StackView({
         <IconCheck />
       </span>
       <div className="body">
-        <span className="title">{top.title || 'Untitled'}</span>
+        {top ? <span className="title">{top.title || 'Untitled'}</span> : <span className="title sealed-bar" aria-hidden="true" />}
         <div className="meta">
           <span className="count">
             +{items.length - 1} more done
