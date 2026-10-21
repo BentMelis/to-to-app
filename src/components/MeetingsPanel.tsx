@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { FlaggedItem } from '@/lib/tree/model';
 import { MAX_MEETINGS, MEETING_COLORS, type FlagKind, type Meeting, type MeetingColor } from '@/lib/tree/types';
 import { FlagBadge } from './FlagBadge';
+import { track } from '@/lib/analytics';
 
 interface Props {
   meetings: Meeting[];
@@ -78,7 +79,13 @@ export function MeetingsPanel(p: Props) {
               <Group title="To ask" kind="ask" list={asks} meeting={current} {...p} />
               <Group title="To mention" kind="mention" list={mentions} meeting={current} {...p} />
               <div className="panel-foot">
-                <button className="tb primary" onClick={() => p.onCopy(current.id)}>
+                <button
+                  className="tb primary"
+                  onClick={() => {
+                    p.onCopy(current.id);
+                    track('meeting_list_copied');
+                  }}
+                >
                   Copy list
                 </button>
                 <span>Paste it into the chat or your notes.</span>

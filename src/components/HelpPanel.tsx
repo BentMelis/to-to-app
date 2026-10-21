@@ -1,3 +1,5 @@
+import { CookieSettings } from './ConsentBanner';
+
 const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="t">Tab</kbd>, 'Add inside the selected item (then P, T or N)'],
   [<kbd key="e">Enter</kbd>, 'Add the next item of the same kind'],
@@ -50,6 +52,10 @@ export function HelpPanel() {
       <p>Press <kbd>Q</kbd> to bring an item up at a meeting or with a person: <b>ask</b> a question, or just <b>mention</b> it (“this is done”). Each meeting has its own colour; set them up under <b>Meetings → Edit</b>. The <b>Meetings</b> list shows per meeting what to ask and what to mention, and copies it as an agenda.</p>
       <p>With Focus on, selecting something fades everything outside its project and centres that project.</p>
       <p>Drag empty space to move around. Pinch, or hold Ctrl/⌘ and scroll, to zoom.</p>
+      <p>
+        Everything you write stays in this browser. If you allowed it, we count visits and actions (like creating a tree) with Google Analytics,
+        never what you write. <CookieSettings />
+      </p>
     </section>
   );
 }

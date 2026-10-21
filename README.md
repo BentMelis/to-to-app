@@ -114,6 +114,18 @@ Storage goes through the `Library` and `StorageAdapter` interfaces in `src/lib/s
 (accounts + sync, KAN-11) can be added later without touching the UI. It should keep the same shape: one document per
 tree, plus the small list.
 
+## Analytics
+
+Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src/lib/analytics.ts`:
+
+- **Consent first.** A small banner asks on the first visit. Google's script only loads after *Accept*; with *Decline*
+  (or the browser's Global Privacy Control) nothing is sent. The choice is stored in this browser (`todo-tree:consent`) and can
+  be changed under *Cookie settings* (landing page footer, and the `?` help panel in the app). Withdrawing removes the `_ga` cookies.
+- **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `tree_created`,
+  `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
+  `backup_restored`. Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+- To add an event: add its name to `AppEvent` and call `track('name')`.
+
 ## Deploying
 
 Any Node host or Vercel works (`npm run build && npm start`). After changing cached assets, bump `CACHE` in

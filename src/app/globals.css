@@ -483,3 +483,17 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 .notes-rich p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted); float: left; height: 0; pointer-events: none; }
 .notes-rich .ProseMirror-selectednode { outline: 2px solid var(--leaf); }
 @media (max-width: 640px) { .fmt-sep { display: none; } .fmt { min-width: 34px; height: 34px; } }
+
+/* ---------- Consent (Google Analytics loads only after Accept) ---------- */
+.consent { position: fixed; left: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); z-index: 40; width: min(380px, calc(100% - 32px));
+  background: var(--surface); color: var(--ink); border: 1.5px solid var(--edge); border-radius: 12px; padding: 14px 16px;
+  box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .35); animation: pop-in .2s cubic-bezier(.2, .7, .2, 1); }
+.consent h2 { font-family: var(--font-head); font-size: 17px; margin: 0 0 6px; }
+.consent p { margin: 0 0 12px; font-size: 14px; line-height: 1.5; color: var(--muted); }
+.consent-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.consent-btn { height: 36px; padding: 0 16px; border-radius: 8px; border: 1.5px solid var(--edge); background: var(--surface); font-weight: 700; cursor: pointer; }
+.consent-btn:hover { border-color: var(--bark); }
+.consent-btn.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.consent-btn.primary:hover { opacity: .9; }
+.cookie-settings { border: none; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .consent { animation: none; } }

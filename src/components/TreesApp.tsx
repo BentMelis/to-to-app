@@ -6,6 +6,7 @@ import * as T from '@/lib/tree/trees';
 import { forgetSession } from '@/lib/tree/useTreeStore';
 import TodoTree from './TodoTree';
 import { TreeMenu } from './TreeMenu';
+import { track } from '@/lib/analytics';
 
 /** How long a deleted tree can be brought back. */
 const UNDO_MS = 10_000;
@@ -66,6 +67,7 @@ export default function TreesApp() {
   const current = T.currentTree(list);
 
   const open = (id: string) => {
+    if (id !== list.lastOpenedId) track('tree_switched');
     update((l) => (id === l.lastOpenedId ? l : T.openTree(l, id)));
     closeMenu(true);
   };
@@ -73,6 +75,7 @@ export default function TreesApp() {
     const r = T.addTree(list, name);
     if (!r) return;
     await lib.adapter(r.id).save(T.emptyTree(name));
+    track('tree_created', { trees: r.list.trees.length });
     update((l) => (l.trees.length >= T.MAX_TREES ? l : { trees: [...l.trees, r.list.trees[r.list.trees.length - 1]], lastOpenedId: r.id }));
     closeMenu(true);
   };
@@ -80,6 +83,7 @@ export default function TreesApp() {
     const r = T.removeTree(list, id);
     if (!r) return;
     finalize(); // an earlier deletion is now final
+    track('tree_deleted');
     pending.current = r.removed;
     update((l) => T.removeTree(l, id)?.list ?? l);
     setDeleted({ removed: r.removed, key: Date.now() });

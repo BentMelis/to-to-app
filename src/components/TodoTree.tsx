@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
+import { track } from '@/lib/analytics';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -342,6 +343,7 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
   const setFilters = (f: Filters) => {
     setFiltersRaw(f);
     prefs.set('filters', treeId, f);
+    track('filter_used', { high: !!f.high, due_soon: !!f.dueSoon, idle: !!f.idle });
     requestAnimationFrame(() => fit(true));
   };
 
@@ -477,6 +479,7 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
     if (!n || !canHaveNotes(n.type)) return;
     setSel(id);
     setNotesFor(id);
+    track('notes_opened');
   }
 
   function setFlag(id: string, meetingId: string, kind: 'ask' | 'mention' | null) {
@@ -1074,6 +1077,7 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
     store.commit(d);
     setSel(null);
     showToast(`Restored “${f.name}” into ${treeName}`, true);
+    track('backup_restored');
     requestAnimationFrame(() => fit(true));
   };
 
@@ -1154,7 +1158,10 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
           zoomAt(a.w / 2, (a.top + a.bottom) / 2, f, true);
         }}
         onHelp={() => setPanel((p) => (p === 'help' ? null : 'help'))}
-        onExport={() => exportDoc(doc, treeName)}
+        onExport={() => {
+          exportDoc(doc, treeName);
+          track('backup_downloaded');
+        }}
         onImport={() => fileRef.current?.click()}
       />
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { onImport(e.target.files?.[0]); e.target.value = ''; }} />

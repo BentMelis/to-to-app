@@ -5,6 +5,7 @@ import '@fontsource/atkinson-hyperlegible/latin-700.css';
 import '@fontsource/bricolage-grotesque/latin-600.css';
 import '@fontsource/bricolage-grotesque/latin-700.css';
 import { ServiceWorker } from '@/components/ServiceWorker';
+import { ConsentBanner } from '@/components/ConsentBanner';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: LayoutProps<'/'>) {
       <body>
         {children}
         <ServiceWorker />
+        <ConsentBanner />
       </body>
     </html>
   );

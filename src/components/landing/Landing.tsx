@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { HeroTree } from './HeroTree';
 import { BreakDown, DueSoon, FinishIt, Prepared } from './FlowDemos';
 import { McpDemo } from './McpDemo';
+import { track } from '@/lib/analytics';
+import { CookieSettings } from '../ConsentBanner';
 
 /** Someone who already has trees in this browser gets "Open your trees"; the installed app skips the landing page. */
 function useReturning() {
@@ -134,7 +136,7 @@ export default function Landing() {
           <Logo />
           <span>Todo Tree</span>
         </Link>
-        <Link href="/app" className="btn small">
+        <Link href="/app" className="btn small" onClick={() => track('open_app', { from: 'nav' })}>
           {cta}
         </Link>
       </header>
@@ -152,7 +154,7 @@ export default function Landing() {
               walk into every meeting knowing what to ask.
             </p>
             <div className="hero-cta">
-              <Link href="/app" className="btn">
+              <Link href="/app" className="btn" onClick={() => track('open_app', { from: 'hero' })}>
                 {cta}
                 <span className="arrow" aria-hidden="true">
                   →
@@ -223,8 +225,8 @@ export default function Landing() {
 
         <section className="privacy" aria-label="Your data">
           <p>
-            Your trees live <em>in your browser</em>. No account, no tracking, and it works offline. Sync between your devices is next on the
-            roadmap.
+            Your trees live <em>in your browser</em>. No account, nothing you write leaves your device, and it works offline. Sync between your
+            devices is next on the roadmap.
           </p>
         </section>
 
@@ -243,7 +245,7 @@ export default function Landing() {
           </div>
           <h2 id="closing-title">Start with one project.</h2>
           <p>It takes about ten seconds, and the rest grows from there.</p>
-          <Link href="/app" className="btn">
+          <Link href="/app" className="btn" onClick={() => track('open_app', { from: 'closing' })}>
             {cta}
             <span className="arrow" aria-hidden="true">
               →
@@ -258,7 +260,10 @@ export default function Landing() {
           Todo Tree
         </span>
         <span>A SideQuest project</span>
-        <Link href="/app">Open the app</Link>
+        <CookieSettings />
+        <Link href="/app" onClick={() => track('open_app', { from: 'footer' })}>
+          Open the app
+        </Link>
       </footer>
     </div>
   );
