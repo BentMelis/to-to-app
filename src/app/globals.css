@@ -497,3 +497,13 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 .consent-btn.primary:hover { opacity: .9; }
 .cookie-settings { border: none; background: none; padding: 0; font: inherit; color: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .consent { animation: none; } }
+
+/* ---------- Move to tree ---------- */
+.move-menu { width: 300px; }
+.move-opt { grid-template-columns: 22px 1fr auto; }
+.move-opt b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.move-tree-icon { width: 18px; height: 18px; border-radius: 5px; border: 2px solid var(--ink); position: relative; }
+.move-tree-icon::after { content: ""; position: absolute; left: 100%; top: 50%; width: 5px; height: 2px; background: var(--bark); }
+.move-confirm { padding: 6px 8px 2px; }
+.move-confirm p { margin: 0 0 4px; font-size: 14.5px; line-height: 1.45; }
+.toast button + button { margin-left: -4px; }

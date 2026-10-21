@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
 import { track } from '@/lib/analytics';
+import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
+import type { TreeEntry } from '@/lib/tree/trees';
+import { MoveMenu } from './MoveMenu';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -42,6 +45,14 @@ export interface TreeProps {
   onTreeMenu: () => void;
   /** Renaming the top of the tree renames the tree. */
   onRenameTree: (name: string) => void;
+  /** The user's other trees, for "Move to tree…". Empty when there's only one tree. */
+  otherTrees: TreeEntry[];
+  loadTree: (id: string) => Promise<TreeDoc | null>;
+  saveTree: (id: string, doc: TreeDoc) => Promise<void>;
+  /** Switch to another tree, optionally selecting an item there. */
+  onOpenTree: (id: string, selectId?: string) => void;
+  /** Item to select when this tree opens (after "Move to tree… → Open"). */
+  selectOnOpen?: string | null;
 }
 
 export default function TodoTree(props: TreeProps) {
@@ -50,8 +61,21 @@ export default function TodoTree(props: TreeProps) {
   return <TreeCanvas {...props} store={store} doc={store.doc} />;
 }
 
-function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, onRenameTree }: TreeProps & { store: ReturnType<typeof useTreeStore>; doc: TreeDoc }) {
-  const [sel, setSelRaw] = useState<string | null>(null);
+function TreeCanvas({
+  store,
+  doc,
+  treeId,
+  treeName,
+  treeMenuOpen,
+  onTreeMenu,
+  onRenameTree,
+  otherTrees,
+  loadTree,
+  saveTree,
+  onOpenTree,
+  selectOnOpen,
+}: TreeProps & { store: ReturnType<typeof useTreeStore>; doc: TreeDoc }) {
+  const [sel, setSelRaw] = useState<string | null>(selectOnOpen ?? null);
   const [editing, setEditing] = useState<{ id: string; isNew: boolean } | null>(null);
   const [hideDone, setHideDone] = useState(false);
   const [focusMode, setFocusMode] = useState(true);
@@ -76,11 +100,12 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
       document.removeEventListener('visibilitychange', tick);
     };
   }, []);
-  const [toast, setToast] = useState<{ msg: string; undo: boolean; key: number } | null>(null);
+  const [toast, setToast] = useState<{ msg: string; undo: boolean; key: number; actions?: { label: string; run: () => void }[] } | null>(null);
   const [panel, setPanel] = useState<'help' | 'meetings' | null>(null);
   // The item whose notes are open in the centred notes dialog.
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
+  const [moveMenu, setMoveMenu] = useState<string | null>(null);
   const [manageMeetings, setManageMeetings] = useState(false);
   // Last meeting tab looked at (a viewing preference, remembered per browser).
   const [activeMeeting, setActiveMeetingRaw] = useState<string | null>(() => prefs.get<string>('meeting', treeId));
@@ -361,10 +386,10 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
 
   /* ---------- Toast ---------- */
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = useCallback((msg: string, undo = false) => {
-    setToast({ msg, undo, key: Date.now() });
+  const showToast = useCallback((msg: string, undo = false, actions?: { label: string; run: () => void }[]) => {
+    setToast({ msg, undo, key: Date.now(), actions });
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), undo ? 6000 : 3500);
+    toastTimer.current = setTimeout(() => setToast(null), actions ? 9000 : undo ? 6000 : 3500);
   }, []);
 
   /* ---------- Actions ---------- */
@@ -480,6 +505,45 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
     setSel(id);
     setNotesFor(id);
     track('notes_opened');
+  }
+
+  /** Move an item and everything inside it to another tree (KAN-23). One undo step here; the toast undoes both trees. */
+  async function moveToTree(id: string, treeId: string) {
+    setMoveMenu(null);
+    focusCanvas();
+    const n = idx.byId.get(id);
+    const parent = idx.parentOf.get(id);
+    if (!n || !parent) return;
+    const index = parent.children.indexOf(n);
+    const original = structuredClone(n);
+    const target = otherTrees.find((t) => t.id === treeId)?.name ?? 'the other tree';
+    const dst = await loadTree(treeId);
+    const plan = dst && planMove(latest.current.doc, id, dst);
+    const removed = M.removeNode(latest.current.doc, id);
+    if (!dst || !plan || !removed) return showToast(`Couldn’t move “${n.title || 'Untitled'}”`);
+    try {
+      await saveTree(treeId, addToRoot(dst, plan.node));
+    } catch {
+      return showToast(`Couldn’t save ${target}. Nothing was moved.`);
+    }
+    latest.current.store.commit(removed.doc);
+    setSel(removed.nextId);
+    track('item_moved_to_tree', { kind: n.type, items: plan.items, flags_kept: plan.kept, flags_dropped: plan.dropped });
+    const lost = plan.dropped ? ` · ${plan.dropped} meeting flag${plan.dropped === 1 ? '' : 's'} removed` : '';
+    showToast(`Moved “${n.title || 'Untitled'}” to ${target}${lost}`, false, [
+      {
+        label: 'Undo',
+        run: async () => {
+          const l = latest.current;
+          l.store.commit(insertAt(l.doc, parent.id, index, original));
+          l.setSel(original.id);
+          const t = await loadTree(treeId);
+          const back = t && M.removeNode(t, plan.node.id);
+          if (back) await saveTree(treeId, back.doc);
+        },
+      },
+      { label: 'Open', run: () => onOpenTree(treeId, plan.node.id) },
+    ]);
   }
 
   function setFlag(id: string, meetingId: string, kind: 'ask' | 'mention' | null) {
@@ -914,7 +978,7 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (editing || picker || duePicker || flagMenu || notesFor) return;
+    if (editing || picker || duePicker || flagMenu || notesFor || moveMenu) return;
     const t = e.target as HTMLElement;
     if (t.closest?.('input,textarea,[contenteditable="true"]')) return;
     const mod = e.metaKey || e.ctrlKey, key = e.key;
@@ -1004,6 +1068,13 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
         if (id && id !== 'root') {
           e.preventDefault();
           openFlagMenu(id);
+        }
+        break;
+      case 'm':
+      case 'M':
+        if (id && id !== 'root' && otherTrees.length) {
+          e.preventDefault();
+          setMoveMenu(id);
         }
         break;
       case 'h':
@@ -1167,6 +1238,21 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { onImport(e.target.files?.[0]); e.target.value = ''; }} />
 
       {help && <HelpPanel />}
+      {moveMenu && idx.byId.get(moveMenu) && (
+        <MoveMenu
+          node={idx.byId.get(moveMenu)!}
+          doc={doc}
+          trees={otherTrees}
+          loadTree={loadTree}
+          getAnchor={() => els.current.get(moveMenu) ?? null}
+          getTop={() => topbarRef.current?.getBoundingClientRect().bottom ?? 60}
+          onMove={(treeId) => moveToTree(moveMenu, treeId)}
+          onClose={(refocus) => {
+            setMoveMenu(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
       {filterMenu && (
         <FilterMenu
           filters={filters}
@@ -1282,7 +1368,7 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
         />
       )}
 
-      {selId && !editing && !picker && !duePicker && !flagMenu && !notesFor && (
+      {selId && !editing && !picker && !duePicker && !flagMenu && !notesFor && !moveMenu && (
         <nav className="group actions" aria-label="Selected item">
           {isStackId(selId) ? (
             <button className="tb" onClick={() => openStack(selId.slice(6))}>
@@ -1330,6 +1416,11 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
                   {selNode.flags ? `Bring up (${Object.keys(selNode.flags).length})` : 'Bring up…'} <kbd>Q</kbd>
                 </button>
               )}
+              {selNode.type !== 'root' && otherTrees.length > 0 && (
+                <button className="tb" onClick={() => setMoveMenu(selNode.id)}>
+                  Move to tree… <kbd>M</kbd>
+                </button>
+              )}
               {selNode.type !== 'root' && (
                 <button className="tb" onClick={() => setPicker({ forId: selNode.id, mode: 'change' })}>
                   Change kind <kbd>K</kbd>
@@ -1361,6 +1452,17 @@ function TreeCanvas({ store, doc, treeId, treeName, treeMenuOpen, onTreeMenu, on
               Undo
             </button>
           )}
+          {toast.actions?.map((a) => (
+            <button
+              key={a.label}
+              onClick={() => {
+                setToast(null);
+                a.run();
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
         </div>
       )}
 

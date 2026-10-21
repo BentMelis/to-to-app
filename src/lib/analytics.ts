@@ -101,7 +101,8 @@ export type AppEvent =
   | 'meeting_list_copied'
   | 'filter_used'
   | 'backup_downloaded'
-  | 'backup_restored';
+  | 'backup_restored'
+  | 'item_moved_to_tree';
 
 export function track(event: AppEvent, params?: Record<string, string | number | boolean>) {
   if (!loaded || typeof window === 'undefined' || !window.gtag || getConsent() !== 'granted') return;

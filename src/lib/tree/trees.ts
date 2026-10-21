@@ -1,6 +1,8 @@
 import { countDesc, uid } from './model';
 import { DOC_VERSION, type TreeDoc } from './types';
 
+export type { TreeDoc };
+
 /**
  * Several trees per user (work, personal, a side project…). Each tree is its own TreeDoc with its own
  * meetings and settings; this list only says which trees exist, in which order, and which was open last.

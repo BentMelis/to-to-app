@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { localLibrary } from '@/lib/storage';
 import * as T from '@/lib/tree/trees';
 import { forgetSession } from '@/lib/tree/useTreeStore';
@@ -58,6 +58,16 @@ export default function TreesApp() {
     };
   }, []);
 
+  // "Move to tree…": read and write other trees. Writing drops that tree's in-memory session, so it reloads fresh.
+  const loadTree = useCallback((id: string) => lib.adapter(id).load(), []);
+  const saveTree = useCallback(async (id: string, doc: T.TreeDoc) => {
+    await lib.adapter(id).save(doc);
+    forgetSession(id);
+  }, []);
+  const otherTrees = useMemo(() => (list ? list.trees.filter((t) => t.id !== list.lastOpenedId) : []), [list]);
+  /** After "Open" in the move toast: which item to select once the other tree is open. */
+  const [selectOnOpen, setSelectOnOpen] = useState<{ treeId: string; itemId: string } | null>(null);
+
   const closeMenu = useCallback((refocus: boolean) => {
     setMenu(false);
     if (refocus) requestAnimationFrame(() => document.getElementById('vp')?.focus({ preventScroll: true }));
@@ -67,6 +77,7 @@ export default function TreesApp() {
   const current = T.currentTree(list);
 
   const open = (id: string) => {
+    setSelectOnOpen(null);
     if (id !== list.lastOpenedId) track('tree_switched');
     update((l) => (id === l.lastOpenedId ? l : T.openTree(l, id)));
     closeMenu(true);
@@ -108,6 +119,15 @@ export default function TreesApp() {
         treeMenuOpen={menu}
         onTreeMenu={() => setMenu((m) => !m)}
         onRenameTree={(name) => update((l) => T.renameTree(l, current.id, name))}
+        otherTrees={otherTrees}
+        loadTree={loadTree}
+        saveTree={saveTree}
+        onOpenTree={(id, itemId) => {
+          setSelectOnOpen(itemId ? { treeId: id, itemId } : null);
+          track('tree_switched');
+          update((l) => T.openTree(l, id));
+        }}
+        selectOnOpen={selectOnOpen?.treeId === current.id ? selectOnOpen.itemId : null}
       />
       {menu && (
         <TreeMenu

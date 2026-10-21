@@ -66,6 +66,11 @@ npm run dev        # http://localhost:3000
   state, and the app reopens the last tree you used. Renaming the top of a tree renames the tree. Deleting asks for
   confirmation with the number of items and can be undone for 10 seconds. Backups are per tree. Existing data becomes
   the first tree automatically.
+- **Move to tree** — `M` or *Move to tree…* moves the selected item with everything inside it to the top level of
+  another tree (fresh ids, so no clashes). Meeting flags follow by meeting name; flags for meetings the other tree
+  doesn't have are dropped, after a confirmation that names them. The toast offers *Undo* (puts it back in its old
+  place and removes it from the other tree) and *Open* (switches there with the item selected). `Ctrl/⌘+Z` alone only
+  restores the source tree. Logic in `src/lib/tree/moveTree.ts`.
 - Backup download / restore (.json) of the open tree, self-hosted fonts (works fully offline, nothing sent to Google).
 
 ## Project layout
@@ -123,8 +128,10 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   be changed under *Cookie settings* (landing page footer, and the `?` help panel in the app). Withdrawing removes the `_ga` cookies.
 - **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`. Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
-- To add an event: add its name to `AppEvent` and call `track('name')`.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+- To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
+  [Todo Tree – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
+  (what fires when, parameters, file:line).
 
 ## Deploying
 

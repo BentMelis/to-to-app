@@ -18,6 +18,7 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="c">C</kbd>, 'Collapse or expand'],
   [<kbd key="f">F</kbd>, 'Fit the tree on screen'],
   [<><kbd>W</kbd> then <kbd>1</kbd>–<kbd>9</kbd></>, 'Switch to another tree'],
+  [<kbd key="m">M</kbd>, 'Move the selected item (and everything inside it) to another tree'],
   [<><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></>, 'Undo'],
 ];
 
