@@ -35,3 +35,75 @@ export function saveHideSensitive(on: boolean) {
     /* not remembered */
   }
 }
+
+/* ---------- Automatic hiding (KAN-38) ---------- */
+/*
+ * Browsers never tell a page that it's being shared (Zoom, Teams, Meet). So we hide at the moments sharing usually
+ * starts: when you leave TwigList (to click "Share" elsewhere), when TwigList opens, or some minutes after showing them.
+ */
+
+export interface AutoHide {
+  /** Hide as soon as TwigList loses focus (window, tab or app switch). */
+  leave: boolean;
+  /** Every visit starts with sensitive items hidden. */
+  start: boolean;
+  /** Hide again this many minutes after they were shown (0 = never). */
+  again: number;
+}
+export const AUTO_OFF: AutoHide = { leave: false, start: false, again: 0 };
+export const AGAIN_CHOICES = [5, 15, 30] as const;
+
+const AUTO_KEY = 'todo-tree:sensitive-auto';
+
+export function parseAutoHide(raw: string | null): AutoHide {
+  try {
+    const v = JSON.parse(raw ?? 'null') as Partial<AutoHide> | null;
+    if (!v || typeof v !== 'object') return AUTO_OFF;
+    const again = Number(v.again);
+    return { leave: v.leave === true, start: v.start === true, again: Number.isFinite(again) && again > 0 ? Math.min(again, 24 * 60) : 0 };
+  } catch {
+    return AUTO_OFF;
+  }
+}
+export function loadAutoHide(): AutoHide {
+  try {
+    return parseAutoHide(localStorage.getItem(AUTO_KEY));
+  } catch {
+    return AUTO_OFF;
+  }
+}
+export function saveAutoHide(a: AutoHide) {
+  try {
+    localStorage.setItem(AUTO_KEY, JSON.stringify(a));
+  } catch {
+    /* not remembered */
+  }
+}
+
+/** True when anything in the tree is marked sensitive (automatic hiding only acts then). */
+export function anySensitive(root: TreeNode): boolean {
+  return root.children.some((c) => !!c.sensitive || anySensitive(c));
+}
+
+/** "Start hidden" applies once per page load, not every time another tree is opened. */
+let startChecked = false;
+
+/**
+ * The hide state when a tree opens: what was last chosen in this browser, unless "start hidden" is on and this is the
+ * first tree opened since the page loaded. `auto` says the start rule switched it on (for analytics).
+ */
+export function initialHideSensitive(): { hidden: boolean; auto: boolean } {
+  const saved = loadHideSensitive();
+  const first = !startChecked;
+  startChecked = true;
+  if (first && !saved && loadAutoHide().start) {
+    saveHideSensitive(true);
+    return { hidden: true, auto: true };
+  }
+  return { hidden: saved, auto: false };
+}
+
+/** Tests only: pretend the page was just loaded. */
+export function resetStartCheck() {
+  startChecked = false;
+}

@@ -15,6 +15,10 @@ const STATUS: Record<SaveStatus, string> = {
 interface Props {
   hideSensitive: boolean;
   onHideSensitive: () => void;
+  /** Any automatic hiding switched on (KAN-38). */
+  autoHideOn: boolean;
+  sensitiveMenuOpen: boolean;
+  onSensitiveMenu: (anchor: DOMRect) => void;
   treeName: string;
   treeMenuOpen: boolean;
   onTreeMenu: () => void;
@@ -98,6 +102,17 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         >
           {p.hideSensitive ? <IconEyeOff /> : <IconEye />}
           <span className="tb-label">{p.hideSensitive ? 'Hidden' : 'Sensitive'}</span>
+        </button>
+        <button
+          className={'tb icon sensitive-more' + (p.autoHideOn ? ' auto' : '')}
+          data-sensitive-button
+          aria-haspopup="dialog"
+          aria-expanded={p.sensitiveMenuOpen}
+          aria-label={'Hide sensitive items automatically' + (p.autoHideOn ? ' (on)' : '')}
+          title={p.autoHideOn ? 'Automatic hiding is on' : 'Hide sensitive items automatically…'}
+          onClick={(e) => p.onSensitiveMenu(e.currentTarget.getBoundingClientRect())}
+        >
+          <IconChevron />
         </button>
       </div>
       <div className="group">

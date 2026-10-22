@@ -6,7 +6,8 @@ import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
 import { MoveMenu } from './MoveMenu';
-import { loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
+import { anySensitive, initialHideSensitive, loadAutoHide, NONE, saveAutoHide, saveHideSensitive, sealedIds, type AutoHide } from '@/lib/tree/sensitive';
+import { SensitiveMenu } from './SensitiveMenu';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -108,7 +109,19 @@ function TreeCanvas({
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [moveMenu, setMoveMenu] = useState<string | null>(null);
   // KAN-20: hide sensitive items, e.g. while screen-sharing. Remembered per browser, for every tree.
-  const [hideSensitive, setHideSensitiveRaw] = useState(loadHideSensitive);
+  // KAN-38: "start hidden" may switch it on when the app opens (once per page load).
+  const [hideSensitive, setHideSensitiveRaw] = useState(() => {
+    const s = initialHideSensitive();
+    if (s.auto) track('sensitive_auto_hidden', { reason: 'start' });
+    return s.hidden;
+  });
+  const [autoHide, setAutoHideRaw] = useState<AutoHide>(loadAutoHide);
+  const setAutoHide = (a: AutoHide) => {
+    setAutoHideRaw(a);
+    saveAutoHide(a);
+    track('sensitive_auto_settings', { leave: a.leave, start: a.start, again: a.again });
+  };
+  const [sensitiveMenu, setSensitiveMenu] = useState<DOMRect | null>(null);
   const setHideSensitive = (on: boolean) => {
     setHideSensitiveRaw(on);
     saveHideSensitive(on);
@@ -128,6 +141,8 @@ function TreeCanvas({
   const idx = useMemo(() => M.buildIndex(doc.root), [doc]);
   /** Sensitive items and everything inside them, while hidden. */
   const sealed = useMemo(() => (hideSensitive ? sealedIds(doc.root) : NONE), [hideSensitive, doc]);
+  const hasSensitive = useMemo(() => anySensitive(doc.root), [doc]);
+
   const flagsFor = (meetingId: string) => M.collectFlags(doc.root, idx, meetingId).filter((f) => !sealed.has(f.id));
   const flaggedCount = useMemo(() => {
     let c = 0;
@@ -686,6 +701,40 @@ function TreeCanvas({
   useLayoutEffect(() => {
     latest.current = { doc, idx, vis, editing, store, showToast, setSel, sealed };
   });
+
+  // KAN-38: browsers can't tell us the screen is being shared, so hide at the moments sharing usually starts.
+  // Anything open about a sensitive item (notes, flag or move menu, title editing) closes with it.
+  const hideNow = useCallback((reason: 'blur' | 'timer') => {
+    const s = sealedIds(latest.current.doc.root);
+    const drop = (id: string | null) => (id && s.has(id) ? null : id);
+    setNotesFor(drop);
+    setFlagMenu(drop);
+    setMoveMenu(drop);
+    setEditing((e) => (e && s.has(e.id) ? null : e));
+    setHideSensitiveRaw(true);
+    saveHideSensitive(true);
+    track('sensitive_auto_hidden', { reason });
+  }, []);
+  // Leaving TwigList (window blur or tab hidden), e.g. to click "Share" in Zoom or Teams. Coming back reveals nothing.
+  useEffect(() => {
+    if (!autoHide.leave || hideSensitive || !hasSensitive) return;
+    const away = () => {
+      if (document.visibilityState === 'visible' && document.hasFocus()) return;
+      hideNow('blur');
+    };
+    window.addEventListener('blur', away);
+    document.addEventListener('visibilitychange', away);
+    return () => {
+      window.removeEventListener('blur', away);
+      document.removeEventListener('visibilitychange', away);
+    };
+  }, [autoHide.leave, hideSensitive, hasSensitive, hideNow]);
+  // And a while after they were shown, so an open branch doesn't stay open into the next meeting.
+  useEffect(() => {
+    if (!autoHide.again || hideSensitive || !hasSensitive) return;
+    const t = window.setTimeout(() => hideNow('timer'), autoHide.again * 60_000);
+    return () => window.clearTimeout(t);
+  }, [autoHide.again, hideSensitive, hasSensitive, hideNow]);
   const suppressClick = useRef(false);
 
   useEffect(() => {
@@ -1253,6 +1302,9 @@ function TreeCanvas({
         treeMenuOpen={treeMenuOpen}
         hideSensitive={hideSensitive}
         onHideSensitive={() => setHideSensitive(!hideSensitive)}
+        autoHideOn={autoHide.leave || autoHide.start || autoHide.again > 0}
+        sensitiveMenuOpen={!!sensitiveMenu}
+        onSensitiveMenu={(r) => setSensitiveMenu((m) => (m ? null : r))}
         onTreeMenu={onTreeMenu}
         hideDone={hideDone}
         focusMode={focusMode}
@@ -1288,7 +1340,7 @@ function TreeCanvas({
       <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { onImport(e.target.files?.[0]); e.target.value = ''; }} />
 
       {help && <HelpPanel />}
-      {moveMenu && idx.byId.get(moveMenu) && (
+      {moveMenu && idx.byId.get(moveMenu) && !sealed.has(moveMenu) && (
         <MoveMenu
           node={idx.byId.get(moveMenu)!}
           doc={doc}
@@ -1299,6 +1351,18 @@ function TreeCanvas({
           onMove={(treeId) => moveToTree(moveMenu, treeId)}
           onClose={(refocus) => {
             setMoveMenu(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
+      {sensitiveMenu && (
+        <SensitiveMenu
+          auto={autoHide}
+          anchor={sensitiveMenu}
+          hasSensitive={hasSensitive}
+          onChange={setAutoHide}
+          onClose={(refocus) => {
+            setSensitiveMenu(null);
             if (refocus) focusCanvas();
           }}
         />
@@ -1317,7 +1381,7 @@ function TreeCanvas({
           }}
         />
       )}
-      {notesFor && idx.byId.get(notesFor) && (
+      {notesFor && idx.byId.get(notesFor) && !sealed.has(notesFor) && (
         <NotesPanel
           node={idx.byId.get(notesFor)!}
           path={M.pathTo(idx, notesFor)}
@@ -1371,7 +1435,7 @@ function TreeCanvas({
         />
       )}
 
-      {flagMenu && idx.byId.get(flagMenu) && (
+      {flagMenu && idx.byId.get(flagMenu) && !sealed.has(flagMenu) && (
         <FlagMenu
           node={idx.byId.get(flagMenu)!}
           meetings={doc.meetings}
