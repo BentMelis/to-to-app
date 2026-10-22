@@ -105,8 +105,7 @@ export type AppEvent =
   | 'item_moved_to_tree'
   | 'sensitive_marked'
   | 'sensitive_view_toggled'
-  | 'sensitive_auto_hidden'
-  | 'sensitive_auto_settings';
+  | 'sensitive_auto_hidden';
 
 export function track(event: AppEvent, params?: Record<string, string | number | boolean>) {
   if (!loaded || typeof window === 'undefined' || !window.gtag || getConsent() !== 'granted') return;

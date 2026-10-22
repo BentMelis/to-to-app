@@ -522,10 +522,4 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 .tb.sensitive-toggle.on { background: var(--ink); color: var(--paper); box-shadow: none; }
 .tb.sensitive-toggle.on:hover { background: var(--ink); opacity: .9; }
 @media (max-width: 640px) { .sensitive-toggle .tb-label { display: none; } }
-/* KAN-38: settings for automatic hiding, attached to the eye button. */
-.tb.sensitive-toggle { border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.tb.sensitive-more { width: 24px; min-width: 24px; padding: 0; margin-left: -3px; border-top-left-radius: 0; border-bottom-left-radius: 0; position: relative; }
-.tb.sensitive-more svg { width: 12px; height: 12px; }
-.tb.sensitive-more.auto::after { content: ''; position: absolute; top: 5px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--leaf); }
-.sensitive-menu { width: 320px; }
-.sensitive-menu .filter-opt { grid-template-columns: auto 0 1fr; }
+

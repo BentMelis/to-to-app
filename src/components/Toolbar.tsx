@@ -15,10 +15,6 @@ const STATUS: Record<SaveStatus, string> = {
 interface Props {
   hideSensitive: boolean;
   onHideSensitive: () => void;
-  /** Any automatic hiding switched on (KAN-38). */
-  autoHideOn: boolean;
-  sensitiveMenuOpen: boolean;
-  onSensitiveMenu: (anchor: DOMRect) => void;
   treeName: string;
   treeMenuOpen: boolean;
   onTreeMenu: () => void;
@@ -97,22 +93,11 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         <button
           className={'tb sensitive-toggle' + (p.hideSensitive ? ' on' : '')}
           aria-pressed={p.hideSensitive}
-          title={p.hideSensitive ? 'Sensitive items are hidden. Show them (Shift+H)' : 'Hide sensitive items, e.g. while sharing your screen (Shift+H)'}
+          title={p.hideSensitive ? 'Sensitive items are hidden. Show them (Shift+H)' : 'Hide sensitive items, e.g. while sharing your screen (Shift+H). They also hide by themselves when you switch to another window.'}
           onClick={p.onHideSensitive}
         >
           {p.hideSensitive ? <IconEyeOff /> : <IconEye />}
           <span className="tb-label">{p.hideSensitive ? 'Hidden' : 'Sensitive'}</span>
-        </button>
-        <button
-          className={'tb icon sensitive-more' + (p.autoHideOn ? ' auto' : '')}
-          data-sensitive-button
-          aria-haspopup="dialog"
-          aria-expanded={p.sensitiveMenuOpen}
-          aria-label={'Hide sensitive items automatically' + (p.autoHideOn ? ' (on)' : '')}
-          title={p.autoHideOn ? 'Automatic hiding is on' : 'Hide sensitive items automatically…'}
-          onClick={(e) => p.onSensitiveMenu(e.currentTarget.getBoundingClientRect())}
-        >
-          <IconChevron />
         </button>
       </div>
       <div className="group">

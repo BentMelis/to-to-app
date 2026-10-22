@@ -6,8 +6,7 @@ import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
 import { MoveMenu } from './MoveMenu';
-import { anySensitive, initialHideSensitive, loadAutoHide, NONE, saveAutoHide, saveHideSensitive, sealedIds, type AutoHide } from '@/lib/tree/sensitive';
-import { SensitiveMenu } from './SensitiveMenu';
+import { anySensitive, loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -109,19 +108,7 @@ function TreeCanvas({
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [moveMenu, setMoveMenu] = useState<string | null>(null);
   // KAN-20: hide sensitive items, e.g. while screen-sharing. Remembered per browser, for every tree.
-  // KAN-38: "start hidden" may switch it on when the app opens (once per page load).
-  const [hideSensitive, setHideSensitiveRaw] = useState(() => {
-    const s = initialHideSensitive();
-    if (s.auto) track('sensitive_auto_hidden', { reason: 'start' });
-    return s.hidden;
-  });
-  const [autoHide, setAutoHideRaw] = useState<AutoHide>(loadAutoHide);
-  const setAutoHide = (a: AutoHide) => {
-    setAutoHideRaw(a);
-    saveAutoHide(a);
-    track('sensitive_auto_settings', { leave: a.leave, start: a.start, again: a.again });
-  };
-  const [sensitiveMenu, setSensitiveMenu] = useState<DOMRect | null>(null);
+  const [hideSensitive, setHideSensitiveRaw] = useState(loadHideSensitive);
   const setHideSensitive = (on: boolean) => {
     setHideSensitiveRaw(on);
     saveHideSensitive(on);
@@ -702,9 +689,10 @@ function TreeCanvas({
     latest.current = { doc, idx, vis, editing, store, showToast, setSel, sealed };
   });
 
-  // KAN-38: browsers can't tell us the screen is being shared, so hide at the moments sharing usually starts.
+  // KAN-38: browsers can't tell us the screen is being shared, but sharing almost always starts by leaving TwigList
+  // (to click "Share" in Zoom or Teams). So every window or tab switch hides sensitive items; showing is manual.
   // Anything open about a sensitive item (notes, flag or move menu, title editing) closes with it.
-  const hideNow = useCallback((reason: 'blur' | 'timer') => {
+  const hideNow = useCallback(() => {
     const s = sealedIds(latest.current.doc.root);
     const drop = (id: string | null) => (id && s.has(id) ? null : id);
     setNotesFor(drop);
@@ -713,14 +701,13 @@ function TreeCanvas({
     setEditing((e) => (e && s.has(e.id) ? null : e));
     setHideSensitiveRaw(true);
     saveHideSensitive(true);
-    track('sensitive_auto_hidden', { reason });
+    track('sensitive_auto_hidden', { reason: 'blur' });
   }, []);
-  // Leaving TwigList (window blur or tab hidden), e.g. to click "Share" in Zoom or Teams. Coming back reveals nothing.
   useEffect(() => {
-    if (!autoHide.leave || hideSensitive || !hasSensitive) return;
+    if (hideSensitive || !hasSensitive) return;
     const away = () => {
       if (document.visibilityState === 'visible' && document.hasFocus()) return;
-      hideNow('blur');
+      hideNow();
     };
     window.addEventListener('blur', away);
     document.addEventListener('visibilitychange', away);
@@ -728,13 +715,7 @@ function TreeCanvas({
       window.removeEventListener('blur', away);
       document.removeEventListener('visibilitychange', away);
     };
-  }, [autoHide.leave, hideSensitive, hasSensitive, hideNow]);
-  // And a while after they were shown, so an open branch doesn't stay open into the next meeting.
-  useEffect(() => {
-    if (!autoHide.again || hideSensitive || !hasSensitive) return;
-    const t = window.setTimeout(() => hideNow('timer'), autoHide.again * 60_000);
-    return () => window.clearTimeout(t);
-  }, [autoHide.again, hideSensitive, hasSensitive, hideNow]);
+  }, [hideSensitive, hasSensitive, hideNow]);
   const suppressClick = useRef(false);
 
   useEffect(() => {
@@ -1302,9 +1283,6 @@ function TreeCanvas({
         treeMenuOpen={treeMenuOpen}
         hideSensitive={hideSensitive}
         onHideSensitive={() => setHideSensitive(!hideSensitive)}
-        autoHideOn={autoHide.leave || autoHide.start || autoHide.again > 0}
-        sensitiveMenuOpen={!!sensitiveMenu}
-        onSensitiveMenu={(r) => setSensitiveMenu((m) => (m ? null : r))}
         onTreeMenu={onTreeMenu}
         hideDone={hideDone}
         focusMode={focusMode}
@@ -1351,18 +1329,6 @@ function TreeCanvas({
           onMove={(treeId) => moveToTree(moveMenu, treeId)}
           onClose={(refocus) => {
             setMoveMenu(null);
-            if (refocus) focusCanvas();
-          }}
-        />
-      )}
-      {sensitiveMenu && (
-        <SensitiveMenu
-          auto={autoHide}
-          anchor={sensitiveMenu}
-          hasSensitive={hasSensitive}
-          onChange={setAutoHide}
-          onClose={(refocus) => {
-            setSensitiveMenu(null);
             if (refocus) focusCanvas();
           }}
         />
