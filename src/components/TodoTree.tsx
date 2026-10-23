@@ -12,6 +12,7 @@ import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tr
 import { idleItems, lastActivity } from '@/lib/tree/activity';
 import { FilterMenu } from './FilterMenu';
 import { NotesPanel } from './NotesPanel';
+import { NotesPreviewCard } from './NotesPreviewCard';
 import { branchBounds, isFolded, isStackId, layout, stackId, visibleTree, VGAP, type Box, type VisItem } from '@/lib/tree/layout';
 import { TYPES, type ChildType, type TreeDoc, type TreeNode } from '@/lib/tree/types';
 import { useTreeStore } from '@/lib/tree/useTreeStore';
@@ -971,6 +972,82 @@ function TreeCanvas({
     };
   }, [applyView, zoomAt]);
 
+  /* ---------- Notes preview: hover the notes button, or rest on an item with the keyboard (KAN-25) ---------- */
+  // Short enough to feel instant, long enough that sweeping the mouse across the tree doesn't flash cards.
+  const PREVIEW_DELAY = 200;
+  const [preview, setPreview] = useState<{ id: string; anchor: HTMLElement; viaKeyboard: boolean } | null>(null);
+  const previewBlocked = !!(editing || picker || duePicker || flagMenu || notesFor || moveMenu || filterMenu || treeMenuOpen);
+  const previewTimers = useRef<{ show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
+  const usingKeys = useRef(false);
+  const blockedRef = useRef(previewBlocked);
+  useLayoutEffect(() => {
+    blockedRef.current = previewBlocked;
+  });
+
+  useEffect(() => {
+    const vp = vpRef.current!;
+    const t = previewTimers.current;
+    const busy = () => blockedRef.current || vp.classList.contains('is-dragging') || vp.classList.contains('panning');
+    const over = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse') return; // touch has no hover: tapping opens the notes as before
+      const btn = (e.target as HTMLElement).closest<HTMLElement>('.notes-btn.filled');
+      const id = btn?.closest<HTMLElement>('.node')?.dataset.id;
+      if (!btn || !id) return;
+      clearTimeout(t.hide);
+      clearTimeout(t.show);
+      t.show = setTimeout(() => {
+        if (!busy() && btn.isConnected && btn.matches(':hover')) setPreview({ id, anchor: btn, viaKeyboard: false });
+      }, PREVIEW_DELAY);
+    };
+    const out = (e: PointerEvent) => {
+      const btn = (e.target as HTMLElement).closest('.notes-btn.filled');
+      if (!btn || btn.contains(e.relatedTarget as Node | null)) return;
+      clearTimeout(t.show);
+      // A moment to move onto the card itself.
+      t.hide = setTimeout(() => setPreview((p) => (p && !p.viaKeyboard ? null : p)), 150);
+    };
+    // Any press or key ends a preview; the canvas may move or something else may open.
+    const down = (e: PointerEvent) => {
+      usingKeys.current = false;
+      if ((e.target as HTMLElement).closest('.notes-preview')) return;
+      clearTimeout(t.show);
+      setPreview(null);
+    };
+    const key = () => {
+      usingKeys.current = true;
+      clearTimeout(t.show);
+      setPreview(null);
+    };
+    const wheel = () => setPreview(null);
+    vp.addEventListener('pointerover', over);
+    vp.addEventListener('pointerout', out);
+    vp.addEventListener('wheel', wheel, { passive: true });
+    window.addEventListener('pointerdown', down, true);
+    window.addEventListener('keydown', key, true);
+    return () => {
+      vp.removeEventListener('pointerover', over);
+      vp.removeEventListener('pointerout', out);
+      vp.removeEventListener('wheel', wheel);
+      window.removeEventListener('pointerdown', down, true);
+      window.removeEventListener('keydown', key, true);
+      clearTimeout(t.show);
+      clearTimeout(t.hide);
+    };
+  }, []);
+
+  // Keyboard users get the same preview when they stay on an item with notes.
+  const selHasNotes = !!selId && !sealed.has(selId) && !!idx.byId.get(selId)?.notes && canHaveNotes(idx.byId.get(selId)!.type);
+  useEffect(() => {
+    if (!selHasNotes || previewBlocked || !usingKeys.current) return;
+    const timer = setTimeout(() => {
+      const btn = els.current.get(selId!)?.querySelector<HTMLElement>('.notes-btn.filled');
+      if (btn && document.activeElement === vpRef.current && !blockedRef.current) setPreview({ id: selId!, anchor: btn, viaKeyboard: true });
+    }, PREVIEW_DELAY);
+    return () => clearTimeout(timer);
+  }, [selId, selHasNotes, previewBlocked]);
+
+  const previewNode = preview && !previewBlocked && !sealed.has(preview.id) ? idx.byId.get(preview.id) : null;
+
   /* ---------- Clicks on the canvas ---------- */
   const onCanvasClick = (e: React.MouseEvent) => {
     if (suppressClick.current) return;
@@ -1344,6 +1421,22 @@ function TreeCanvas({
           onClose={(refocus) => {
             setFilterMenu(null);
             if (refocus) focusCanvas();
+          }}
+        />
+      )}
+      {previewNode?.notes && preview && (
+        <NotesPreviewCard
+          notes={previewNode.notes}
+          anchor={preview.anchor}
+          viaKeyboard={preview.viaKeyboard}
+          onOpen={() => {
+            setPreview(null);
+            openNotes(previewNode.id);
+          }}
+          onPointerEnter={() => clearTimeout(previewTimers.current.hide)}
+          onPointerLeave={() => {
+            if (preview.viaKeyboard) return;
+            previewTimers.current.hide = setTimeout(() => setPreview(null), 150);
           }}
         />
       )}

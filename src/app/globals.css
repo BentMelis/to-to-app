@@ -482,6 +482,39 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 .notes-rich .selectedCell::after { content: ""; position: absolute; inset: 0; background: color-mix(in srgb, var(--leaf) 18%, transparent); pointer-events: none; }
 .notes-rich p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: var(--muted); float: left; height: 0; pointer-events: none; }
 .notes-rich .ProseMirror-selectednode { outline: 2px solid var(--leaf); }
+
+/* Notes preview card on hover / keyboard rest (KAN-25): the editor's look, read-only, without loading the editor. */
+.notes-preview { position: fixed; z-index: 7; width: 300px; max-width: calc(100vw - 16px); background: var(--surface); border: 1.5px solid var(--note-edge);
+  border-radius: 10px; box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 16%, transparent); cursor: pointer; overflow: hidden;
+  animation: fade-in .12s ease; font-size: 13.5px; line-height: 1.5; color: var(--ink); }
+.notes-preview-body { max-height: 260px; overflow: hidden; padding: 10px 14px 4px; overflow-wrap: anywhere; position: relative; }
+.notes-preview.more .notes-preview-body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 40px; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface)); }
+.notes-preview-body > :first-child { margin-top: 0; }
+.notes-preview p { margin: 0 0 .5em; white-space: pre-line; }
+.notes-preview h1, .notes-preview h2, .notes-preview h3 { font-family: var(--font-head); line-height: 1.25; margin: .7em 0 .3em; }
+.notes-preview h1 { font-size: 17px; } .notes-preview h2 { font-size: 15.5px; } .notes-preview h3 { font-size: 14px; }
+.notes-preview ul, .notes-preview ol { margin: 0 0 .5em; padding-left: 1.4em; }
+.notes-preview li.d1 { margin-left: 1.2em; } .notes-preview li.d2 { margin-left: 2.4em; } .notes-preview li.d3 { margin-left: 3.6em; }
+.notes-preview ul.tasks { list-style: none; padding-left: .1em; }
+.notes-preview ul.tasks li { display: flex; align-items: flex-start; gap: 7px; }
+.notes-preview ul.tasks .box { flex: none; width: 13px; height: 13px; margin-top: .25em; border: 1.5px solid var(--muted); border-radius: 3px; }
+.notes-preview ul.tasks li.checked .box { background: var(--leaf); border-color: var(--leaf); }
+.notes-preview ul.tasks li.checked > span:last-child { color: var(--muted); text-decoration: line-through; }
+.notes-preview blockquote { margin: 0 0 .5em; padding: 1px 0 1px 10px; border-left: 3px solid var(--edge); color: var(--muted); }
+.notes-preview code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .9em;
+  background: color-mix(in srgb, var(--edge) 22%, transparent); border-radius: 4px; padding: 1px 4px; }
+.notes-preview pre { background: var(--ink); color: var(--paper); border-radius: 7px; padding: 7px 10px; margin: 0 0 .5em; overflow: hidden; white-space: pre; }
+.notes-preview pre code { background: none; padding: 0; color: inherit; font-size: 12px; }
+.notes-preview a { color: var(--leaf); text-decoration: underline; text-underline-offset: 2px; }
+.notes-preview hr { border: none; border-top: 1px solid var(--edge); margin: .7em 0; }
+.notes-preview table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: 0 0 .5em; font-size: 12.5px; }
+.notes-preview th, .notes-preview td { border: 1px solid var(--edge); padding: 3px 6px; text-align: left; vertical-align: top; overflow: hidden; text-overflow: ellipsis; }
+.notes-preview th { background: color-mix(in srgb, var(--edge) 18%, transparent); }
+.notes-preview-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 14px 8px;
+  font-size: 12.5px; font-weight: 700; color: var(--leaf); border-top: 1px solid color-mix(in srgb, var(--edge) 60%, transparent); }
+.notes-preview:hover .notes-preview-foot { text-decoration: underline; text-underline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .notes-preview { animation: none; } }
 @media (max-width: 640px) { .fmt-sep { display: none; } .fmt { min-width: 34px; height: 34px; } }
 
 /* ---------- Consent (Google Analytics loads only after Accept) ---------- */

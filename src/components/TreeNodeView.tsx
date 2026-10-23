@@ -7,7 +7,6 @@ import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
 import type { Meeting } from '@/lib/tree/types';
 import { FlagBadge, flagLabel } from './FlagBadge';
-import { notesPreview } from '@/lib/tree/notesText';
 import { IconCalendar, IconCheck, IconIdle, IconLock, IconNotes, IconPlus } from './icons';
 import { describeIdle } from '@/lib/tree/activity';
 
@@ -241,7 +240,8 @@ function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editi
             tabIndex={-1}
             data-act="notes"
             aria-label={(n.notes ? 'Read notes: ' : 'Add notes: ') + name}
-            title={n.notes ? notesPreview(n.notes) : 'Add notes'}
+            // With notes, hovering shows a formatted preview card instead of a tooltip (KAN-25).
+            title={n.notes ? undefined : 'Add notes'}
           >
             <IconNotes />
           </button>

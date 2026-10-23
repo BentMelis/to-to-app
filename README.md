@@ -71,6 +71,9 @@ titles, the install manifest, canonical URLs and social previews read from there
   Markdown (GFM) in the tree; plain-text notes from before are converted on first load (document v4) and look the same.
   The editor is loaded only when notes are opened. It saves as you type (one undo step
   per editing session); Esc, ⌘/Ctrl+Enter, *Done* or clicking outside closes it. Items with notes show a filled page icon.
+- **Notes preview** — hover the filled page icon (or stay on the item with the keyboard) to see the start of the notes
+  in a small read-only card, formatted like the editor, without loading it. Long notes fade out; clicking the card opens
+  the full notes. Not shown while dragging, editing or with a menu open; on touch, tapping the icon opens the notes.
 - **Several trees** — keep work, personal and side projects apart. The tree name in the top-left corner (or `W`, then
   `1`–`9`) switches trees; the same menu creates them and has *Rename, reorder, delete…* (up to 10; the last one can't be
   deleted). Each tree has its own projects, meetings, filters, idle threshold, undo history, camera position and fold
@@ -110,12 +113,14 @@ src/
     FilterMenu.tsx      High priority / due soon / idle filters + idle threshold
     NotesPanel.tsx      Centred notes dialog for a project or todo
     RichNotes.tsx       The rich text editor inside it (Tiptap, Markdown in/out, formatting bar)
+    NotesPreviewCard.tsx Hover/keyboard preview card of an item's notes
     Toolbar.tsx, TypePicker.tsx, HelpPanel.tsx, icons.tsx, ServiceWorker.tsx
   lib/
     tree/types.ts       Node types and which types may contain which
     tree/trees.ts       The list of trees: add, rename, reorder, remove/restore (pure)
     tree/model.ts       Pure, immutable tree operations (add, move, moveTo, indent, toggle…) + stats
     tree/notesText.ts   Notes as Markdown: migrating plain text, escaping, plain-text previews
+    tree/notesBlocks.ts The start of a note as simple blocks for the preview card (no editor needed)
     tree/activity.ts    Activity stamps (diffed centrally in the store) and idle detection
     tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout
