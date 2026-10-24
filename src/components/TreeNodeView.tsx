@@ -204,7 +204,9 @@ function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editi
                     : isRoot
                       ? `${s.done} of ${s.total} done`
                       : comp && type === 'project'
-                        ? `All done · ${s.done} done`
+                        ? s.arch === s.total
+                          ? `All done · ${s.arch} archived`
+                          : `All done · ${s.done} done`
                         : `${s.done}/${s.total}`}
                 </span>
                 {s.total > 0 && (

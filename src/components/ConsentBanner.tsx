@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getConsent, loadAnalytics, resetConsent, setConsent } from '@/lib/analytics';
+import { applyInternalParam, getConsent, isInternal, loadAnalytics, resetConsent, setConsent } from '@/lib/analytics';
 
 /**
  * Asks once whether we may count visits with Google Analytics. Nothing loads before "Accept".
@@ -11,6 +11,8 @@ export function ConsentBanner() {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // ?internal=1 / ?internal=0 first, so analytics loads with the right flag.
+    applyInternalParam();
     const sync = () => {
       const c = getConsent();
       if (c === 'granted') loadAnalytics();
@@ -38,6 +40,23 @@ export function ConsentBanner() {
         </button>
       </div>
     </section>
+  );
+}
+
+/** Shown in the help panel while this browser is marked as internal (our own visits). */
+export function InternalTrafficNote() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const sync = () => setOn(isInternal());
+    sync();
+    window.addEventListener('todo-tree:internal', sync);
+    return () => window.removeEventListener('todo-tree:internal', sync);
+  }, []);
+  if (!on) return null;
+  return (
+    <span className="internal-chip" title="Visits from this browser are marked as internal and filtered out of the statistics. Open TwigList with ?internal=0 to undo.">
+      Internal traffic
+    </span>
   );
 }
 

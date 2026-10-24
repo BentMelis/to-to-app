@@ -67,12 +67,13 @@ export function useTreeStore(adapter: StorageAdapter, key = 'default') {
 
   /** Apply a change as a new undo step. */
   // Every change stamps the items it touched, which drives the idle heads-up (see activity.ts).
-  const commit = useCallback((next: TreeDoc) => {
-    setH((s) => (s ? { doc: stampChanges(s.doc, next), past: [...s.past.slice(-HISTORY + 1), s.doc], future: [] } : s));
+  // `quiet`: not activity (e.g. archiving, KAN-28), so nothing is stamped.
+  const commit = useCallback((next: TreeDoc, opts?: { quiet?: boolean }) => {
+    setH((s) => (s ? { doc: opts?.quiet ? next : stampChanges(s.doc, next), past: [...s.past.slice(-HISTORY + 1), s.doc], future: [] } : s));
   }, []);
   /** Replace the current doc without a new undo step (e.g. naming an item that was just added). */
-  const replace = useCallback((next: TreeDoc) => {
-    setH((s) => (s ? { ...s, doc: stampChanges(s.doc, next) } : s));
+  const replace = useCallback((next: TreeDoc, opts?: { quiet?: boolean }) => {
+    setH((s) => (s ? { ...s, doc: opts?.quiet ? next : stampChanges(s.doc, next) } : s));
   }, []);
   /** Throw away the latest step entirely (e.g. a new item that was left empty). */
   const revert = useCallback(() => {

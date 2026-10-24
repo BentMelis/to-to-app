@@ -100,3 +100,9 @@ export const IconEyeOff = () => (
     <path d="M2.5 2.5l11 11" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
   </svg>
 );
+export const IconArchive = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="2" y="3" width="12" height="3.2" rx="1" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M3.2 6.2V12a1.3 1.3 0 0 0 1.3 1.3h7a1.3 1.3 0 0 0 1.3-1.3V6.2M6.5 8.8h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);

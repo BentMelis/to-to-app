@@ -1,4 +1,4 @@
-import { CookieSettings } from './ConsentBanner';
+import { CookieSettings, InternalTrafficNote } from './ConsentBanner';
 
 const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="t">Tab</kbd>, 'Add inside the selected item (then P, T or N)'],
@@ -15,6 +15,7 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<><kbd>Alt</kbd> + <kbd>↑</kbd> <kbd>↓</kbd></>, 'Move the item up or down'],
   [<><kbd>Alt</kbd> + <kbd>→</kbd> <kbd>←</kbd></>, 'Tuck under the item above, or move out a level'],
   [<kbd key="st">S</kbd>, 'Stack finished items again'],
+  [<><kbd>Shift</kbd> + <kbd>A</kbd></>, 'Archive a finished todo or complete project'],
   [<kbd key="c">C</kbd>, 'Collapse or expand'],
   [<kbd key="f">F</kbd>, 'Fit the tree on screen'],
   [<><kbd>W</kbd> then <kbd>1</kbd>–<kbd>9</kbd></>, 'Switch to another tree'],
@@ -47,7 +48,7 @@ export function HelpPanel() {
           ))}
         </tbody>
       </table>
-      <p>Finished todos turn grey and stack up at the bottom of their branch. Click a stack to look through it. A project whose todos are all done keeps its place and shows <b>All done</b>, so you can add the next todo right away.</p>
+      <p>Finished todos turn grey and stack up at the bottom of their branch. Click a stack to look through it. A week after you tick them they move to the <b>Archive</b> (toolbar), where you can find, restore or delete them; anything you still have to bring up at a meeting stays. Archive something yourself with <kbd>Shift</kbd>+<kbd>A</kbd>. A project whose todos are all done keeps its place and shows <b>All done</b>, so you can add the next todo right away.</p>
       <p>Deadlines turn <span className="due-chip soon">orange</span> when 3 days or fewer are left and <span className="due-chip urgent">red</span> from the last day on, including overdue. High-priority items get a <span className="prio-badge" aria-hidden="true">!</span>.</p>
       <p>Projects and todos that nothing has happened to for a while (7 days by default) get a quiet <span className="idle-chip">idle</span> tag and a dashed border. Any change to the item or anything inside it counts as activity; folding doesn’t. Change the number of days, or turn it off, under <b>Filter</b>.</p>
       <p>Use <b>Filter</b> to show only high-priority, soon-due or idle items. The projects above them stay visible, faded, so you know where they live.</p>
@@ -58,7 +59,7 @@ export function HelpPanel() {
       <p>Drag empty space to move around. Pinch, or hold Ctrl/⌘ and scroll, to zoom.</p>
       <p>
         Everything you write stays in this browser. If you allowed it, we count visits and actions (like creating a tree) with Google Analytics,
-        never what you write. <CookieSettings />
+        never what you write. <CookieSettings /> <InternalTrafficNote />
       </p>
     </section>
   );

@@ -43,6 +43,14 @@ titles, the install manifest, canonical URLs and social previews read from there
   camera to centre it. Toggle with the **Focus** button.
 - **Finished items** — turn grey, sink to the bottom of their branch, and two or more stack into a single card.
   Click the stack (or `Enter`) to look through them; they restack when you move away, or press `S`.
+- **Archive** (KAN-28) — a finished todo moves out of the tree 7 days after it was ticked (`doneAt`; fixed, no
+  setting). A todo with steps goes as a whole; steps never on their own; todos with a meeting flag stay. Projects are
+  never archived automatically, but a complete one can be by hand (`Shift+A`, also finished todos). Archived items keep
+  counting as done (`arch` on the parent), so 8/10 stays 8/10; a project with only archived work shows
+  “All done · N archived”. The *Archive* panel (toolbar) searches, restores (to the old place; if its project is
+  archived too, the project comes back with just that item) and deletes for good. The archive is part of the tree
+  document (`doc.archive`, doc v5), so it's in backups. Archiving is not activity for the idle heads-up and auto-archive
+  is not an undo step. Logic in `src/lib/tree/archive.ts`.
 - **Complete projects stay in the tree** (KAN-34) — a project whose todos are all done is *complete*, not *done*:
   it keeps its position, look and fold state, shows a full ring and “All done · N done”, is never stacked and stays
   visible with *Hide done*. Only todos (`isDone` in `model.ts`) step back. Complete still means no deadline warnings,
@@ -152,9 +160,12 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
 - **Consent first.** A small banner asks on the first visit. Google's script only loads after *Accept*; with *Decline*
   (or the browser's Global Privacy Control) nothing is sent. The choice is stored in this browser (`todo-tree:consent`) and can
   be changed under *Cookie settings* (landing page footer, and the `?` help panel in the app). Withdrawing removes the `_ga` cookies.
-- **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `tree_created`,
+- **Internal traffic.** Open any page with `?internal=1` to mark this browser as ours (`todo-tree:internal`); GA then
+  gets `traffic_type: 'internal'` and the *Internal traffic* data filter leaves it out. `?internal=0` undoes it; the
+  help panel shows an *Internal traffic* chip while it's on.
+- **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `todo_completed` (steps), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `sensitive_auto_hidden` (reason: blur). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `sensitive_auto_hidden` (reason: blur), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
   [TwigList – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).

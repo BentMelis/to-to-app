@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { legacyNotesToMarkdown, notesPreview } from '../notesText';
 import { parseDoc } from '../model';
+import { DOC_VERSION } from '../types';
 
 describe('notes as Markdown', () => {
   it('keeps old plain-text notes looking the same', () => {
@@ -17,7 +18,7 @@ describe('notes as Markdown', () => {
     });
     expect(parseDoc(doc(3))!.root.children[0].notes).toBe('line 1  \nline 2');
     expect(parseDoc(doc(4))!.root.children[0].notes).toBe('line 1\nline 2');
-    expect(parseDoc(doc(4))!.v).toBe(4);
+    expect(parseDoc(doc(4))!.v).toBe(DOC_VERSION);
   });
 
   it('makes a readable plain-text preview', () => {

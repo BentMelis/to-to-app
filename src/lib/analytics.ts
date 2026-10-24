@@ -14,6 +14,38 @@ const VERSION = 1;
 
 export type Consent = 'granted' | 'denied';
 
+/*
+ * Internal traffic: our own visits are marked so GA's "Internal traffic" data filter can leave them out.
+ * Visit any page with ?internal=1 to mark this browser, ?internal=0 to unmark it. Remembered per browser.
+ */
+const INTERNAL_KEY = 'todo-tree:internal';
+
+export function isInternal(): boolean {
+  try {
+    return localStorage.getItem(INTERNAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Read ?internal=1 / ?internal=0 from the address and remember it. Runs before analytics loads. */
+export function applyInternalParam() {
+  if (typeof window === 'undefined') return;
+  const v = new URLSearchParams(window.location.search).get('internal');
+  if (v !== '1' && v !== '0') return;
+  try {
+    if (v === '1') localStorage.setItem(INTERNAL_KEY, '1');
+    else localStorage.removeItem(INTERNAL_KEY);
+  } catch {
+    /* not remembered */
+  }
+  // Keep the address clean so the flag isn't shared by copying the link.
+  const url = new URL(window.location.href);
+  url.searchParams.delete('internal');
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+  window.dispatchEvent(new Event('todo-tree:internal'));
+}
+
 type Gtag = (...args: unknown[]) => void;
 declare global {
   interface Window {
@@ -72,7 +104,12 @@ export function loadAnalytics() {
     window.dataLayer!.push(arguments);
   };
   window.gtag('js', new Date());
-  window.gtag('config', GA_ID, { allow_google_signals: false, allow_ad_personalization_signals: false });
+  window.gtag('config', GA_ID, {
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false,
+    // Our own visits: filtered out by GA's "Internal traffic" data filter.
+    ...(isInternal() ? { traffic_type: 'internal' } : {}),
+  });
   const s = document.createElement('script');
   s.async = true;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
@@ -94,6 +131,7 @@ function stopAnalytics() {
 /** What people do with the product. No content, ever: only names from this list and small, fixed parameters. */
 export type AppEvent =
   | 'open_app'
+  | 'todo_completed'
   | 'tree_created'
   | 'tree_switched'
   | 'tree_deleted'
@@ -105,7 +143,11 @@ export type AppEvent =
   | 'item_moved_to_tree'
   | 'sensitive_marked'
   | 'sensitive_view_toggled'
-  | 'sensitive_auto_hidden';
+  | 'sensitive_auto_hidden'
+  | 'items_archived'
+  | 'archive_opened'
+  | 'archive_restored'
+  | 'archive_deleted';
 
 export function track(event: AppEvent, params?: Record<string, string | number | boolean>) {
   if (!loaded || typeof window === 'undefined' || !window.gtag || getConsent() !== 'granted') return;

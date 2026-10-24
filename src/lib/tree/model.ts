@@ -15,6 +15,7 @@ import {
   type TreeNode,
 } from './types';
 import { legacyNotesToMarkdown } from './notesText';
+import type { ArchivedItem } from './types';
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -115,8 +116,41 @@ function normalize(raw: unknown, depth: number, plainNotes = false): TreeNode {
     ...(typeof n.notes === 'string' && n.notes.trim() && depth > 0 ? { notes: plainNotes ? legacyNotesToMarkdown(n.notes) : n.notes } : {}),
     // Items from before activity tracking start their clock now, so nothing is instantly "idle".
     ...(depth > 0 ? { touched: typeof n.touched === 'number' && isFinite(n.touched) ? n.touched : Date.now() } : {}),
+    // Todos ticked before the archive existed count as finished today, so nothing is archived on day one.
+    ...(type === 'todo' && n.done ? { doneAt: isTime(n.doneAt) ? n.doneAt : Date.now() } : {}),
+    ...((type === 'project' || type === 'root') && typeof n.arch === 'number' && n.arch > 0 ? { arch: Math.round(n.arch) } : {}),
+    ...(depth > 0 && isTime(n.holdFrom) ? { holdFrom: n.holdFrom } : {}),
     children,
   };
+}
+
+const isTime = (v: unknown): v is number => typeof v === 'number' && isFinite(v) && v > 0;
+
+function readArchive(raw: unknown, meetingIds: Set<string>, plainNotes: boolean): ArchivedItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ArchivedItem[] = [];
+  const seen = new Set<string>();
+  for (const e of raw) {
+    if (!e || typeof e !== 'object') continue;
+    const r = e as Partial<ArchivedItem>;
+    const node = normalize(r.node, 1, plainNotes);
+    if (node.type === 'note' || seen.has(node.id)) continue;
+    seen.add(node.id);
+    pruneFlags(node, meetingIds);
+    const strings = (v: unknown) => (Array.isArray(v) ? v.map(String) : []);
+    out.push({
+      node,
+      parentId: String(r.parentId || 'root'),
+      index: typeof r.index === 'number' && r.index >= 0 ? Math.floor(r.index) : 0,
+      ancestors: strings(r.ancestors),
+      path: strings(r.path),
+      archivedAt: isTime(r.archivedAt) ? r.archivedAt : Date.now(),
+      how: r.how === 'manual' ? 'manual' : 'auto',
+      ...(r.sensitive ? { sensitive: true } : {}),
+      ...(typeof r.within === 'string' && r.within ? { within: r.within } : {}),
+    });
+  }
+  return out;
 }
 
 export function parseDoc(input: unknown): TreeDoc | null {
@@ -124,12 +158,15 @@ export function parseDoc(input: unknown): TreeDoc | null {
     const s = typeof input === 'string' ? JSON.parse(input) : input;
     if (s && typeof s === 'object' && 'root' in s && s.root) {
       const v = (s as { v?: unknown }).v;
-      const root = normalize((s as { root: unknown }).root, 0, !(typeof v === 'number' && v >= 4));
+      const plain = !(typeof v === 'number' && v >= 4);
+      const root = normalize((s as { root: unknown }).root, 0, plain);
       const meetings = readMeetings((s as { meetings?: unknown }).meetings);
-      pruneFlags(root, new Set(meetings.map((m) => m.id)));
+      const ids = new Set(meetings.map((m) => m.id));
+      pruneFlags(root, ids);
       const raw = (s as { settings?: { idleDays?: unknown } }).settings;
       const idleDays = typeof raw?.idleDays === 'number' && raw.idleDays >= 0 ? Math.min(365, Math.round(raw.idleDays)) : 7;
-      return { v: DOC_VERSION, root, meetings, settings: { idleDays } };
+      const archive = readArchive((s as { archive?: unknown }).archive, ids, plain);
+      return { v: DOC_VERSION, root, meetings, settings: { idleDays }, ...(archive.length ? { archive } : {}) };
     }
   } catch {
     /* fall through */
@@ -158,6 +195,7 @@ export function buildIndex(root: TreeNode): TreeIndex {
       const x = walk(c, n);
       r.total += x.total;
       r.done += x.done;
+      if (x.arch) r.arch = (r.arch ?? 0) + x.arch;
     }
     if (n.type === 'todo' && r.total === 0) {
       r.total = 1;
@@ -166,6 +204,12 @@ export function buildIndex(root: TreeNode): TreeIndex {
     if (n.type === 'note') {
       r.total = 0;
       r.done = 0;
+    }
+    // Archived todos keep counting as done (KAN-28): 8/10 stays 8/10 after archiving.
+    if (n.arch && n.type !== 'note' && n.type !== 'todo') {
+      r.total += n.arch;
+      r.done += n.arch;
+      r.arch = (r.arch ?? 0) + n.arch;
     }
     stats.set(n.id, r);
     return r;
@@ -277,18 +321,25 @@ export function rename(doc: TreeDoc, id: string, title: string) {
   return { doc: d };
 }
 
-function setAll(n: TreeNode, v: boolean) {
-  if (n.type === 'todo') n.done = v;
-  n.children.forEach((c) => setAll(c, v));
+/** Tick or untick one todo, keeping `doneAt` (when it was finished) in step. */
+function setDone(n: TreeNode, v: boolean, now: number) {
+  if (v && !n.done) n.doneAt = now;
+  if (!v) delete n.doneAt;
+  n.done = v;
 }
 
-export function toggleDone(doc: TreeDoc, id: string) {
+function setAll(n: TreeNode, v: boolean, now: number) {
+  if (n.type === 'todo') setDone(n, v, now);
+  n.children.forEach((c) => setAll(c, v, now));
+}
+
+export function toggleDone(doc: TreeDoc, id: string, now = Date.now()) {
   const { doc: d, idx } = draft(doc);
   const n = idx.byId.get(id);
   if (!n || n.type !== 'todo') return null;
   const target = !isComplete(idx, n);
-  if (n.children.some((c) => c.type === 'todo')) setAll(n, target);
-  else n.done = target;
+  if (n.children.some((c) => c.type === 'todo')) setAll(n, target, now);
+  else setDone(n, target, now);
   return { doc: d, done: target };
 }
 
@@ -307,7 +358,11 @@ export function changeType(doc: TreeDoc, id: string, type: ChildType) {
   const n = idx.byId.get(id);
   if (!n || n.type === 'root' || n.type === type || blockReason(idx, n, type)) return null;
   n.type = type;
-  if (type !== 'todo') n.done = false;
+  if (type !== 'todo') {
+    n.done = false;
+    delete n.doneAt;
+  }
+  if (type !== 'project') delete n.arch;
   if (!canSchedule(type)) {
     delete n.high;
     delete n.due;
@@ -392,6 +447,8 @@ export function setFlag(doc: TreeDoc, id: string, meetingId: string, kind: FlagK
   else if (n.flags) {
     delete n.flags[meetingId];
     if (!Object.keys(n.flags).length) delete n.flags;
+    // Raised: give it a week in the tree before the archive takes it (KAN-28).
+    n.holdFrom = Date.now();
   }
   return { doc: d };
 }

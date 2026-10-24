@@ -6,6 +6,8 @@ import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
 import { MoveMenu } from './MoveMenu';
+import { ArchivePanel } from './ArchivePanel';
+import { archiveItem, autoArchive, canArchive, deleteArchived, restoreItem } from '@/lib/tree/archive';
 import { anySensitive, loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
@@ -103,7 +105,7 @@ function TreeCanvas({
     };
   }, []);
   const [toast, setToast] = useState<{ msg: string; undo: boolean; key: number; actions?: { label: string; run: () => void }[] } | null>(null);
-  const [panel, setPanel] = useState<'help' | 'meetings' | null>(null);
+  const [panel, setPanel] = useState<'help' | 'meetings' | 'archive' | null>(null);
   // The item whose notes are open in the centred notes dialog.
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
@@ -485,6 +487,7 @@ function TreeCanvas({
     showToast(`Deleted “${r.title || 'Untitled'}”` + (r.below ? ` and ${r.below} item${r.below === 1 ? '' : 's'} inside it` : ''), true);
   }
 
+  const completedOnce = useRef(new Set<string>());
   function toggleDone(id: string) {
     const r = M.toggleDone(doc, id);
     if (!r) return;
@@ -492,6 +495,13 @@ function TreeCanvas({
     setSel(id);
     // Safety net: say so (with undo) when this tick finished a whole branch.
     if (r.done) {
+      // The core action: one event per todo going from open to done (a todo with steps counts once). Ticking the same
+      // todo again after an untick in this session doesn't count twice.
+      if (!completedOnce.current.has(id)) {
+        completedOnce.current.add(id);
+        const n = idx.byId.get(id);
+        track('todo_completed', { steps: !!n?.children.some((c) => c.type === 'todo') });
+      }
       const after = M.buildIndex(r.doc.root);
       let top: string | null = null;
       for (let p = idx.parentOf.get(id); p && p.type !== 'root'; p = idx.parentOf.get(p.id) ?? null) {
@@ -529,6 +539,48 @@ function TreeCanvas({
     setSel(id);
     setNotesFor(id);
     track('notes_opened');
+  }
+
+  /* ---------- Archive (KAN-28) ---------- */
+  const archiveCount = (doc.archive ?? []).filter((e) => !e.within).length;
+  const openArchive = () => {
+    setPanel('archive');
+    track('archive_opened');
+  };
+  /** Archive a finished todo or complete project by hand. One undo step; not activity for the idle heads-up. */
+  function archiveNow(id: string) {
+    const n = idx.byId.get(id);
+    if (!n || n.type === 'root') return;
+    if (!canArchive(idx, n)) {
+      showToast(n.type === 'project' ? 'Only a project whose todos are all done can be archived' : 'Only finished todos can be archived');
+      return;
+    }
+    const r = archiveItem(doc, id);
+    if (!r) return;
+    const p = idx.parentOf.get(id);
+    const i = p ? p.children.indexOf(n) : -1;
+    const next = p ? p.children[i + 1] || p.children[i - 1] || p : null;
+    store.commit(r.doc, { quiet: true });
+    setSel(next?.id ?? 'root');
+    track('items_archived', { how: 'manual', kind: n.type, items: r.items });
+    showToast(`Archived “${r.title || 'Untitled'}”` + (r.items > 1 ? ` with ${r.items - 1} item${r.items === 2 ? '' : 's'} inside` : ''), true, [
+      { label: 'View archive', run: openArchive },
+    ]);
+  }
+  function restoreArchived(id: string) {
+    const r = restoreItem(doc, id);
+    if (!r) return;
+    store.commit(r.doc);
+    track('archive_restored');
+    reveal(r.id);
+    showToast(r.note ?? `Restored “${r.title || 'Untitled'}”`, true);
+  }
+  function deleteFromArchive(id: string) {
+    const r = deleteArchived(doc, id);
+    if (!r) return;
+    store.commit(r.doc, { quiet: true });
+    track('archive_deleted', { items: r.items });
+    showToast(`Deleted “${r.title || 'Untitled'}”` + (r.items > 1 ? ` and ${r.items - 1} more` : '') + ' for good', true);
   }
 
   function toggleSensitive(id: string) {
@@ -717,6 +769,21 @@ function TreeCanvas({
       document.removeEventListener('visibilitychange', away);
     };
   }, [hideSensitive, hasSensitive, hideNow]);
+
+  // KAN-28: finished todos move to the archive a week after they were ticked. Checked when the tree opens and when
+  // the day changes. Not an undo step and not activity.
+  const archivedToday = useRef<string | null>(null);
+  useEffect(() => {
+    if (archivedToday.current === today) return;
+    archivedToday.current = today;
+    const r = autoArchive(latest.current.doc, today);
+    if (!r) return;
+    latest.current.store.replace(r.doc, { quiet: true });
+    track('items_archived', { how: 'auto', items: r.todos });
+    latest.current.showToast(`${r.todos} finished todo${r.todos === 1 ? '' : 's'} moved to the archive`, false, [
+      { label: 'View archive', run: () => setPanel('archive') },
+    ]);
+  }, [today]);
   const suppressClick = useRef(false);
 
   useEffect(() => {
@@ -1234,6 +1301,12 @@ function TreeCanvas({
       case 'H':
         if (id) toggleHigh(id);
         break;
+      case 'A':
+        if (e.shiftKey && id && id !== 'root' && !isStackId(id)) {
+          e.preventDefault();
+          archiveNow(id);
+        }
+        break;
       case 'd':
       case 'D': {
         const n = id ? idx.byId.get(id) : null;
@@ -1371,6 +1444,9 @@ function TreeCanvas({
         flaggedCount={flaggedCount}
         meetingDots={doc.meetings.map((m) => ({ id: m.id, name: m.name, color: m.color, count: flagsFor(m.id).length })).filter((m) => m.count > 0)}
         onMeetings={() => setPanel((p) => (p === 'meetings' ? null : 'meetings'))}
+        archiveOpen={panel === 'archive'}
+        archiveCount={archiveCount}
+        onArchive={() => (panel === 'archive' ? setPanel(null) : openArchive())}
         onAdd={(anchor) => setPicker({ forId: 'root', mode: 'add', anchor })}
         onHideDone={() => setHideDone((v) => !v)}
         onFocusMode={() => setFocusMode((v) => !v)}
@@ -1448,6 +1524,18 @@ function TreeCanvas({
           onSessionEnd={() => (notesSession.current = null)}
           onClose={() => {
             setNotesFor(null);
+            focusCanvas();
+          }}
+        />
+      )}
+      {panel === 'archive' && (
+        <ArchivePanel
+          archive={doc.archive ?? []}
+          hideSensitive={hideSensitive}
+          onRestore={restoreArchived}
+          onDelete={deleteFromArchive}
+          onClose={() => {
+            setPanel(null);
             focusCanvas();
           }}
         />
@@ -1596,6 +1684,11 @@ function TreeCanvas({
               {selNode.type !== 'root' && (
                 <button className="tb" aria-pressed={!!selNode.sensitive} onClick={() => toggleSensitive(selNode.id)}>
                   Sensitive <kbd>L</kbd>
+                </button>
+              )}
+              {canArchive(idx, selNode) && (
+                <button className="tb" onClick={() => archiveNow(selNode.id)}>
+                  Archive <kbd>Shift</kbd>+<kbd>A</kbd>
                 </button>
               )}
               {selNode.type !== 'root' && otherTrees.length > 0 && (

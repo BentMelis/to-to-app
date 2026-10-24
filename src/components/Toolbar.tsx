@@ -3,7 +3,7 @@
 import { forwardRef } from 'react';
 import type { SaveStatus } from '@/lib/tree/useTreeStore';
 import { anyFilter, type Filters } from '@/lib/tree/layout';
-import { IconChevron, IconEye, IconEyeOff, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
+import { IconArchive, IconChevron, IconEye, IconEyeOff, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
 
 const STATUS: Record<SaveStatus, string> = {
   loading: '',
@@ -19,6 +19,10 @@ interface Props {
   treeMenuOpen: boolean;
   onTreeMenu: () => void;
   hideDone: boolean;
+  archiveOpen: boolean;
+  /** Entries in the archive (KAN-28). */
+  archiveCount: number;
+  onArchive: () => void;
   focusMode: boolean;
   canUndo: boolean;
   canRedo: boolean;
@@ -73,6 +77,16 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         </button>
         <button className="tb" aria-pressed={p.hideDone} title="Hide finished items" onClick={p.onHideDone}>
           Hide done
+        </button>
+        <button
+          className="tb archive-button"
+          aria-label="Archive"
+          aria-pressed={p.archiveOpen}
+          title={`Finished work that left the tree${p.archiveCount ? ` (${p.archiveCount})` : ''}`}
+          onClick={p.onArchive}
+        >
+          <IconArchive />
+          <span className="tb-label">Archive</span>
         </button>
         <button className="tb" aria-pressed={p.focusMode} title="Focus on the selected project: fade the rest and centre it" onClick={p.onFocusMode}>
           <IconFocus />
