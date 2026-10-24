@@ -72,7 +72,7 @@ titles, the install manifest, canonical URLs and social previews read from there
   branch for N days (default 7; 3/7/14/30 or off, set in the **Filter** menu, stored in the document) gets a dashed
   border and a quiet `Nd idle` tag. Only the topmost idle item of a branch is tagged, a collapsed branch hiding one gets a
   dashed fold button, and **Filter → Idle** shows just those. Trees from before this feature start fresh from the day they're opened.
-- **Notes on projects and todos** — press `N`, click *Notes* in the action bar, or the page icon next to an item to
+- **Notes on projects and todos** — press `N`, choose *Notes* in the item menu, or the page icon next to an item to
   open a centred notes dialog for longer context (links, decisions, who to ask). Notes are **rich text** (Tiptap):
   bold/italic/strikethrough, headings, bullet and numbered lists, checklists, quotes, inline code and code blocks, links
   (`Ctrl/⌘+K`; `Ctrl/⌘+click` opens) and tables, from a formatting bar or Markdown-style typing. They're stored as
@@ -93,7 +93,7 @@ titles, the install manifest, canonical URLs and social previews read from there
   doesn't have are dropped, after a confirmation that names them. The toast offers *Undo* (puts it back in its old
   place and removes it from the other tree) and *Open* (switches there with the item selected). `Ctrl/⌘+Z` alone only
   restores the source tree. Logic in `src/lib/tree/moveTree.ts`.
-- **Sensitive items** (KAN-20) — `L` (or *Sensitive* in the action bar) marks an item; `Shift+H` or the eye button hides
+- **Sensitive items** (KAN-20) — `L` (or *Sensitive* in the item menu) marks an item; `Shift+H` or the eye button hides
   every sensitive item and everything inside it, e.g. while sharing your screen. Hidden items render as a locked,
   blurred placeholder with none of their content in the DOM, can't be opened, edited or dragged, and are left out of
   meeting lists, the copied agenda, filters, idle markers and the hints on folded branches. The toggle is remembered per
@@ -102,6 +102,12 @@ titles, the install manifest, canonical URLs and social previews read from there
   leaving TwigList. So whenever TwigList loses focus (window blur / tab hidden) and the open tree has sensitive items,
   they are hidden. No setting. Notes, flag and move menus or title editing on a sensitive item close with it.
   Showing them again is always manual (`Shift+H`).
+- **Item menu** (KAN-45) — right-click an item (or its hover `⋯` button, or `Shift+F10` / the Menu key) for every
+  action on it, grouped, with its shortcut next to it; Delete last, in red. Right-click selects first; the browser's own
+  menu stays on the empty canvas. Left-click only selects (the old bottom action bar is gone). Closes on `Esc`, outside
+  click or after an action; arrow keys move through it; it flips to stay on screen. All shortcuts are unchanged.
+  `src/components/ItemMenu.tsx`. **Revert:** build with `NEXT_PUBLIC_ITEM_ACTIONS=toolbar` to bring the action bar back
+  and switch the menu off (`src/lib/flags.ts`).
 - Backup download / restore (.json) of the open tree, self-hosted fonts (works fully offline, nothing sent to Google).
 
 ## Project layout
@@ -115,6 +121,7 @@ src/
     TreeMenu.tsx        Tree switcher menu and "Rename, reorder, delete…"
     TodoTree.tsx        The canvas for one tree: state, camera (pan/zoom/focus), keyboard, drag & drop
     TreeNodeView.tsx    A single item + the finished-items stack card
+    ItemMenu.tsx        Right-click / "⋯" menu with every action on an item (KAN-45)
     MeetingsPanel.tsx   Per meeting/person: to ask, to mention; manage meetings
     FlagMenu.tsx        "Bring up … at" menu (ask / mention per meeting)
     DuePicker.tsx       Set / change / remove a deadline
@@ -166,7 +173,7 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   help panel shows an *Internal traffic* chip while it's on.
 - **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `todo_completed` (steps), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `sensitive_auto_hidden` (reason: blur), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `sensitive_auto_hidden` (reason: blur), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items), `item_menu_opened` (via: right_click / button / keyboard), `item_menu_action` (action key, e.g. `rename`, `delete`). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
   [TwigList – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).

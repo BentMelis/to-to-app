@@ -8,6 +8,13 @@ export const IconPlus = ({ w = 2.2 }: { w?: number }) => (
     <path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" strokeWidth={w} strokeLinecap="round" />
   </svg>
 );
+export const IconMore = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="3.5" cy="8" r="1.5" fill="currentColor" />
+    <circle cx="8" cy="8" r="1.5" fill="currentColor" />
+    <circle cx="12.5" cy="8" r="1.5" fill="currentColor" />
+  </svg>
+);
 export const IconMinus = () => (
   <svg viewBox="0 0 16 16" aria-hidden="true">
     <path d="M3.5 8h9" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />

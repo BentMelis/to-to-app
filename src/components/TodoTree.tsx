@@ -7,6 +7,8 @@ import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
 import { MoveMenu } from './MoveMenu';
+import { ItemMenu, type MenuEntry } from './ItemMenu';
+import { ITEM_MENU } from '@/lib/flags';
 import { ArchivePanel } from './ArchivePanel';
 import { archiveItem, autoArchive, canArchive, deleteArchived, restoreItem } from '@/lib/tree/archive';
 import { anySensitive, loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
@@ -114,6 +116,10 @@ function TreeCanvas({
   const [notesFor, setNotesFor] = useState<string | null>(null);
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [moveMenu, setMoveMenu] = useState<string | null>(null);
+  // KAN-45: the item's actions in a context menu (right-click, the "⋯" button, or the Menu key / Shift+F10).
+  const [itemMenu, setItemMenu] = useState<{ id: string; at: { x: number; y: number } | DOMRect; via: 'right_click' | 'button' | 'keyboard' } | null>(
+    null,
+  );
   // KAN-20: hide sensitive items, e.g. while screen-sharing. Remembered per browser, for every tree.
   const [hideSensitive, setHideSensitiveRaw] = useState(loadHideSensitive);
   const setHideSensitive = (on: boolean) => {
@@ -1047,7 +1053,7 @@ function TreeCanvas({
   // Short enough to feel instant, long enough that sweeping the mouse across the tree doesn't flash cards.
   const PREVIEW_DELAY = 200;
   const [preview, setPreview] = useState<{ id: string; anchor: HTMLElement; viaKeyboard: boolean } | null>(null);
-  const previewBlocked = !!(editing || picker || duePicker || flagMenu || notesFor || moveMenu || filterMenu || treeMenuOpen);
+  const previewBlocked = !!(editing || picker || duePicker || flagMenu || notesFor || moveMenu || filterMenu || treeMenuOpen || itemMenu);
   const previewTimers = useRef<{ show?: ReturnType<typeof setTimeout>; hide?: ReturnType<typeof setTimeout> }>({});
   const usingKeys = useRef(false);
   const blockedRef = useRef(previewBlocked);
@@ -1138,7 +1144,13 @@ function TreeCanvas({
       setSel(id);
       return focusCanvas();
     }
-    const act = t.closest<HTMLElement>('[data-act]')?.dataset.act;
+    const actEl = t.closest<HTMLElement>('[data-act]');
+    const act = actEl?.dataset.act;
+    if (act === 'menu' && actEl) {
+      if (itemMenu?.id === id && itemMenu.via === 'button') setItemMenu(null);
+      else openItemMenu(id, actEl.getBoundingClientRect(), 'button');
+      return;
+    }
     if (act === 'check') toggleDone(id);
     else if (act === 'fold') fold(id);
     else if (act === 'notes') {
@@ -1189,7 +1201,7 @@ function TreeCanvas({
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
-    if (editing || picker || duePicker || flagMenu || notesFor || moveMenu) return;
+    if (editing || picker || duePicker || flagMenu || notesFor || moveMenu || itemMenu) return;
     const t = e.target as HTMLElement;
     if (t.closest?.('input,textarea,[contenteditable="true"]')) return;
     const mod = e.metaKey || e.ctrlKey, key = e.key;
@@ -1333,6 +1345,14 @@ function TreeCanvas({
         if (p && openStacks.has(p.id)) closeStack(p.id);
         break;
       }
+      case 'ContextMenu':
+      case 'F10':
+        if (ITEM_MENU && id && (key === 'ContextMenu' || e.shiftKey)) {
+          e.preventDefault();
+          const el = els.current.get(id);
+          if (el) openItemMenu(id, el.getBoundingClientRect(), 'keyboard');
+        }
+        break;
       case 'Delete':
       case 'Backspace':
         e.preventDefault();
@@ -1383,6 +1403,73 @@ function TreeCanvas({
   };
 
   /* ---------- Render ---------- */
+  /* ---------- Item menu (KAN-45) ---------- */
+  function openItemMenu(id: string, at: { x: number; y: number } | DOMRect, via: 'right_click' | 'button' | 'keyboard') {
+    if (!ITEM_MENU) return;
+    setSel(id);
+    setPreview(null);
+    setItemMenu({ id, at, via });
+    track('item_menu_opened', { via });
+  }
+  const onCanvasContextMenu = (e: React.MouseEvent) => {
+    if (!ITEM_MENU) return;
+    const el = (e.target as HTMLElement).closest<HTMLElement>('[data-id]');
+    const id = el?.dataset.id;
+    if (!id) return; // empty canvas: the browser's own menu
+    e.preventDefault();
+    openItemMenu(id, { x: e.clientX, y: e.clientY }, 'right_click');
+  };
+  /** Everything you can do with an item, grouped; shortcuts shown next to each. Same actions as the old action bar. */
+  function menuEntries(id: string): MenuEntry[] {
+    if (isStackId(id)) return [{ key: 'show_done', label: 'Show done', kbd: <kbd>Enter</kbd>, run: () => openStack(id.slice(6)) }];
+    const n = idx.byId.get(id);
+    if (!n) return [];
+    if (sealed.has(id)) return [{ key: 'show_sensitive', label: 'Show sensitive items', kbd: <><kbd>Shift</kbd>+<kbd>H</kbd></>, run: () => setHideSensitive(false) }];
+    const p = idx.parentOf.get(id);
+    const isRoot = n.type === 'root';
+    type Action = Exclude<MenuEntry, 'sep'>;
+    const groups: Action[][] = [
+      [
+        ...(TYPES[n.type].allows.length ? [{ key: 'add_inside', label: 'Add inside…', kbd: <kbd>Tab</kbd>, run: () => setPicker({ forId: id, mode: 'add' }) }] : []),
+        ...(!isRoot ? [{ key: 'add_next', label: 'Add next', kbd: <kbd>Enter</kbd>, run: () => addSibling(id) }] : []),
+      ],
+      [
+        ...(n.type === 'todo' ? [{ key: 'done', label: M.isComplete(idx, n) ? 'Mark as not done' : 'Mark as done', kbd: <kbd>Space</kbd>, run: () => toggleDone(id) }] : []),
+        { key: 'rename', label: 'Rename', kbd: <kbd>F2</kbd>, run: () => setEditing({ id, isNew: false }) },
+        ...(canHaveNotes(n.type) ? [{ key: 'notes', label: n.notes ? 'Notes ✎' : 'Notes', kbd: <kbd>N</kbd>, run: () => openNotes(id) }] : []),
+        ...(!isRoot ? [{ key: 'change_type', label: 'Change type…', kbd: <kbd>K</kbd>, run: () => setPicker({ forId: id, mode: 'change' }) }] : []),
+      ],
+      [
+        ...(canSchedule(n.type)
+          ? [
+              { key: 'high', label: 'High priority', checked: !!n.high, kbd: <kbd>H</kbd>, run: () => toggleHigh(id) },
+              { key: 'deadline', label: n.due ? `Deadline: ${formatDue(n.due, today)}…` : 'Deadline…', kbd: <kbd>D</kbd>, run: () => setDuePicker(id) },
+            ]
+          : []),
+        ...(!isRoot
+          ? [
+              { key: 'bring_up', label: n.flags ? `Bring up… (${Object.keys(n.flags).length})` : 'Bring up…', kbd: <kbd>Q</kbd>, run: () => openFlagMenu(id) },
+              { key: 'sensitive', label: 'Sensitive', checked: !!n.sensitive, kbd: <kbd>L</kbd>, run: () => toggleSensitive(id) },
+            ]
+          : []),
+      ],
+      [
+        ...(!isRoot && otherTrees.length ? [{ key: 'move', label: 'Move to tree…', kbd: <kbd>M</kbd>, run: () => setMoveMenu(id) }] : []),
+        ...(canArchive(idx, n) ? [{ key: 'archive', label: 'Archive', kbd: <><kbd>Shift</kbd>+<kbd>A</kbd></>, run: () => archiveNow(id) }] : []),
+        ...(p && openStacks.has(p.id) && M.isDone(idx, n) ? [{ key: 'stack_done', label: 'Stack done', kbd: <kbd>S</kbd>, run: () => closeStack(p.id) }] : []),
+      ],
+      !isRoot ? [{ key: 'delete', label: 'Delete', danger: true, kbd: <kbd>Del</kbd>, run: () => deleteNode(id) }] : [],
+    ];
+    const out: MenuEntry[] = [];
+    for (const g of groups.filter((g) => g.length)) {
+      if (out.length) out.push('sep');
+      for (const e of g) {
+        out.push({ ...e, run: () => { track('item_menu_action', { action: e.key }); e.run(); } });
+      }
+    }
+    return out;
+  }
+
   const selNode = selId && !isStackId(selId) ? idx.byId.get(selId) : null;
   const selParent = selNode ? idx.parentOf.get(selNode.id) : null;
   const rootOpenKids = vis.kids.get('root') || [];
@@ -1393,7 +1480,7 @@ function TreeCanvas({
 
   return (
     <>
-      <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Your tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onDoubleClick={(e) => {
+      <div id="vp" ref={vpRef} className={emptyState ? 'is-empty' : undefined} tabIndex={0} role="tree" aria-label="Your tree" aria-activedescendant={selId ? `n-${selId.replace(':', '-')}` : undefined} onClick={onCanvasClick} onContextMenu={onCanvasContextMenu} onDoubleClick={(e) => {
         const el = (e.target as HTMLElement).closest<HTMLElement>('.node');
         const id = el?.dataset.id;
         if (id && !isStackId(id) && !sealed.has(id) && !(e.target as HTMLElement).closest('button')) setEditing({ id, isNew: false });
@@ -1423,6 +1510,7 @@ function TreeCanvas({
                 meetings={doc.meetings}
                 folded={!filter?.context.has(it.id) && isFolded(it.node, idx, { openDone })}
                 today={today}
+                menuOpen={itemMenu?.id === it.id && itemMenu.via === 'button'}
                 register={register}
                 onEditEnd={onEditEnd}
               />
@@ -1633,7 +1721,18 @@ function TreeCanvas({
         />
       )}
 
-      {selId && !editing && !picker && !duePicker && !flagMenu && !notesFor && !moveMenu && (
+      {itemMenu && (idx.byId.has(itemMenu.id) || isStackId(itemMenu.id)) && (
+        <ItemMenu
+          label={`Actions for ${isStackId(itemMenu.id) ? 'finished items' : sealed.has(itemMenu.id) ? 'sensitive item' : idx.byId.get(itemMenu.id)?.title || 'Untitled'}`}
+          entries={menuEntries(itemMenu.id)}
+          at={itemMenu.at}
+          onClose={(refocus) => {
+            setItemMenu(null);
+            if (refocus) focusCanvas();
+          }}
+        />
+      )}
+      {!ITEM_MENU && selId && !editing && !picker && !duePicker && !flagMenu && !notesFor && !moveMenu && (
         <nav className="group actions" aria-label="Selected item">
           {isStackId(selId) ? (
             <button className="tb" onClick={() => openStack(selId.slice(6))}>
@@ -1702,7 +1801,7 @@ function TreeCanvas({
               )}
               {selNode.type !== 'root' && (
                 <button className="tb" onClick={() => setPicker({ forId: selNode.id, mode: 'change' })}>
-                  Change kind <kbd>K</kbd>
+                  Change type… <kbd>K</kbd>
                 </button>
               )}
               <button className="tb" onClick={() => setEditing({ id: selNode.id, isNew: false })}>

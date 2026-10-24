@@ -4,7 +4,7 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="t">Tab</kbd>, 'Add inside the selected item (then P, T or N)'],
   [<kbd key="e">Enter</kbd>, 'Add the next item of the same kind'],
   [<kbd key="s">Space</kbd>, 'Mark a todo done or not done'],
-  [<kbd key="k">K</kbd>, 'Change what kind of item it is'],
+  [<kbd key="k">K</kbd>, 'Change type…'],
   [<kbd key="h">H</kbd>, 'Mark a todo or project as high priority (again to remove)'],
   [<kbd key="dl">D</kbd>, 'Set or change a deadline'],
   [<kbd key="n">N</kbd>, 'Write notes for the selected project or todo'],
@@ -23,6 +23,7 @@ const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="l">L</kbd>, 'Mark as sensitive (again to unmark)'],
   [<><kbd>Shift</kbd> + <kbd>H</kbd></>, 'Hide or show sensitive items, e.g. while sharing your screen'],
   [<><kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Z</kbd></>, 'Undo'],
+  [<><kbd>Shift</kbd> + <kbd>F10</kbd></>, 'Open the actions menu for the selected item'],
 ];
 
 export function HelpPanel() {
@@ -38,6 +39,8 @@ export function HelpPanel() {
       </table>
       <h2 style={{ marginTop: 16 }}>Several trees</h2>
       <p className="lead">Keep areas of your life apart: work, personal, a side project. Each tree has its own projects, meetings, filters and settings. Switch with the tree name in the top-left corner, or press <kbd>W</kbd> and a number. Rename the top of a tree to rename the tree.</p>
+      <h2 style={{ marginTop: 16 }}>Doing things with an item</h2>
+      <p className="lead">Right-click an item, or click its <b>⋯</b> button, for everything you can do with it. Each action shows its shortcut, so you can skip the menu next time.</p>
       <h2 style={{ marginTop: 16 }}>Moving things</h2>
       <p className="lead">Drag an item onto another to put it inside, or onto its top or bottom edge to place it before or after. On a touchscreen, press and hold first.</p>
       <h2 style={{ marginTop: 16 }}>Shortcuts</h2>

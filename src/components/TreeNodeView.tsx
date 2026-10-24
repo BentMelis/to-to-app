@@ -7,8 +7,9 @@ import { TYPES, canHaveNotes, type TreeNode } from '@/lib/tree/types';
 import type { Stats } from '@/lib/tree/types';
 import type { Meeting } from '@/lib/tree/types';
 import { FlagBadge, flagLabel } from './FlagBadge';
-import { IconCalendar, IconCheck, IconIdle, IconLock, IconNotes, IconPlus } from './icons';
+import { IconCalendar, IconCheck, IconIdle, IconLock, IconMore, IconNotes, IconPlus } from './icons';
 import { describeIdle } from '@/lib/tree/activity';
+import { ITEM_MENU } from '@/lib/flags';
 
 /** The first meeting (in the user's order) that something inside `nodes` is flagged for, if any. */
 function firstFlagged(nodes: TreeNode[], meetings: Meeting[], deep: boolean, skip?: ReadonlySet<string>): Meeting | null {
@@ -52,6 +53,8 @@ interface Props {
   meetings: Meeting[];
   /** Today's date (YYYY-MM-DD); passed in so deadline colours update when the day changes. */
   today: string;
+  /** The item menu is open from this item's "⋯" button (KAN-45): show the button pressed. */
+  menuOpen?: boolean;
   register: (id: string, el: HTMLElement | null) => void;
   onEditEnd: (id: string, e: EditEnd) => void;
 }
@@ -86,7 +89,7 @@ function SealedNode({ node: n, depth, selected, dim, register }: Props) {
   );
 }
 
-function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, idleDays, idleSince, idleInside, sealedSet, register, onEditEnd }: Props) {
+function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editing, folded, meetings, today, idleDays, idleSince, idleInside, sealedSet, menuOpen, register, onEditEnd }: Props) {
   const type = n.type;
   const isRoot = type === 'root';
   const hasKids = n.children.length > 0;
@@ -251,6 +254,19 @@ function OpenNode({ node: n, depth, idx, stats: s, selected, dim, context, editi
         {TYPES[type].allows.length > 0 && (
           <button className="add" tabIndex={-1} data-act="add" aria-label={'Add inside ' + name}>
             <IconPlus />
+          </button>
+        )}
+        {ITEM_MENU && (
+          <button
+            className={'more' + (menuOpen ? ' pressed' : '')}
+            tabIndex={-1}
+            data-act="menu"
+            aria-haspopup="menu"
+            aria-expanded={!!menuOpen}
+            aria-label={'Actions for ' + name}
+            title="More actions (or right-click)"
+          >
+            <IconMore />
           </button>
         )}
       </div>
