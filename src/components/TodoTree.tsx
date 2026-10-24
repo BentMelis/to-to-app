@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
+import { loadUserPrefs, saveUserPref } from '@/lib/storage/userPrefs';
 import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
 import type { TreeEntry } from '@/lib/tree/trees';
@@ -81,8 +82,11 @@ function TreeCanvas({
 }: TreeProps & { store: ReturnType<typeof useTreeStore>; doc: TreeDoc }) {
   const [sel, setSelRaw] = useState<string | null>(selectOnOpen ?? null);
   const [editing, setEditing] = useState<{ id: string; isNew: boolean } | null>(null);
-  const [hideDone, setHideDone] = useState(false);
-  const [focusMode, setFocusMode] = useState(true);
+  // KAN-44: remembered in this browser for all trees, like the sensitive toggle.
+  const [hideDone, setHideDone] = useState(() => loadUserPrefs().hideDone);
+  const [focusMode, setFocusMode] = useState(() => loadUserPrefs().focus);
+  useEffect(() => saveUserPref('hideDone', hideDone), [hideDone]);
+  useEffect(() => saveUserPref('focus', focusMode), [focusMode]);
   const [openStacks, setOpenStacks] = useState<Set<string>>(() => new Set());
   // Finished items start folded; these are the ones the user opened to look inside.
   const [openDone, setOpenDone] = useState<Set<string>>(() => new Set());

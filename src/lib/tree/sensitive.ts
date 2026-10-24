@@ -1,4 +1,5 @@
 import type { TreeNode } from './types';
+import { loadUserPrefs, saveUserPref } from '@/lib/storage/userPrefs';
 
 /**
  * Sensitive items (KAN-20): an item marked sensitive, and everything inside it, can be hidden with one toggle,
@@ -20,21 +21,8 @@ export function sealedIds(root: TreeNode): Set<string> {
 export const NONE: ReadonlySet<string> = new Set();
 
 /** Remember the toggle in this browser, for every tree: forgetting to turn it on before a meeting is the risk. */
-const KEY = 'todo-tree:hide-sensitive';
-export function loadHideSensitive(): boolean {
-  try {
-    return localStorage.getItem(KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-export function saveHideSensitive(on: boolean) {
-  try {
-    localStorage.setItem(KEY, on ? '1' : '0');
-  } catch {
-    /* not remembered */
-  }
-}
+export const loadHideSensitive = () => loadUserPrefs().hideSensitive;
+export const saveHideSensitive = (on: boolean) => saveUserPref('hideSensitive', on);
 
 /* ---------- Automatic hiding (KAN-38) ---------- */
 /*

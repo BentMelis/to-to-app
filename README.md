@@ -97,7 +97,7 @@ titles, the install manifest, canonical URLs and social previews read from there
   every sensitive item and everything inside it, e.g. while sharing your screen. Hidden items render as a locked,
   blurred placeholder with none of their content in the DOM, can't be opened, edited or dragged, and are left out of
   meeting lists, the copied agenda, filters, idle markers and the hints on folded branches. The toggle is remembered per
-  browser, for all trees (`todo-tree:hide-sensitive`). Logic in `src/lib/tree/sensitive.ts`.
+  browser, for all trees (`hideSensitive` in `todo-tree:user-prefs`). Logic in `src/lib/tree/sensitive.ts`.
 - **Automatic hiding** (KAN-38) — browsers can't tell a page it's being shared, but sharing almost always starts by
   leaving TwigList. So whenever TwigList loses focus (window blur / tab hidden) and the open tree has sensitive items,
   they are hidden. No setting. Notes, flag and move menus or title editing on a sensitive item close with it.
@@ -147,6 +147,7 @@ renaming them would strand the data people already have.
 | `todo-tree:trees` | The list of trees (id, name, order) and which one was open last |
 | `todo-tree:tree:<id>` | One tree: its root, meetings and settings (`TreeDoc`) |
 | `todo-tree:view:<id>`, `todo-tree:filters:<id>`, `todo-tree:meeting:<id>` | Per-tree viewing preferences (camera, filters, last meeting tab) |
+| `todo-tree:user-prefs` | View preferences for all trees (KAN-44): `focus`, `hideDone`, `hideSensitive`. Defaults: focus on, everything shown. `src/lib/storage/userPrefs.ts`; replaces the old `todo-tree:hide-sensitive` key. Moves to the account with KAN-43 |
 | `todo-tree:v1` | The single tree from before multiple trees (and the POC). Migrated into the first tree on first start and left untouched as a safety copy |
 
 Storage goes through the `Library` and `StorageAdapter` interfaces in `src/lib/storage`, so a server-backed version
