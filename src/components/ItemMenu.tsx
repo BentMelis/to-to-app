@@ -22,12 +22,18 @@ interface Props {
   /** Right-click: at the pointer. "⋯" button / keyboard: under this box. */
   at: { x: number; y: number } | DOMRect;
   onClose: (refocus: boolean) => void;
+  /** Any other key: close the menu and let the tree handle it as a shortcut on the item (H, D, Delete, Ctrl+Z…). */
+  onShortcut?: (e: KeyboardEvent) => void;
 }
+
+/** Keys the menu itself uses (without Alt/Ctrl/⌘); everything else is a shortcut for the tree. */
+const MENU_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', 'Escape', 'Tab']);
+const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Fn', 'AltGraph']);
 
 const isRect = (a: Props['at']): a is DOMRect => 'width' in a;
 
 /** A context menu for one tree item (KAN-45): grouped actions with their shortcuts, keyboard-navigable. */
-export function ItemMenu({ label, entries, at, onClose }: Props) {
+export function ItemMenu({ label, entries, at, onClose, onShortcut }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   // Place it at the pointer (or under the button) and flip it back inside the viewport near the edges.
@@ -103,6 +109,10 @@ export function ItemMenu({ label, entries, at, onClose }: Props) {
         } else if (e.key === 'End') {
           e.preventDefault();
           move('last');
+        } else if (onShortcut && !MODIFIERS.has(e.key) && (e.altKey || e.ctrlKey || e.metaKey || !MENU_KEYS.has(e.key))) {
+          // Shortcuts keep working while the menu is open (KAN-45): close it and run the key on the item.
+          e.preventDefault();
+          onShortcut(e.nativeEvent);
         }
       }}
     >

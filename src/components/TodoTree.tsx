@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
 import { loadUserPrefs, saveUserPref } from '@/lib/storage/userPrefs';
 import { track } from '@/lib/analytics';
@@ -1729,6 +1730,13 @@ function TreeCanvas({
           onClose={(refocus) => {
             setItemMenu(null);
             if (refocus) focusCanvas();
+          }}
+          onShortcut={(e) => {
+            // Close first (synchronously), so the tree's key handler no longer sees an open menu, then replay the key there.
+            flushSync(() => setItemMenu(null));
+            focusCanvas();
+            const { key, code, shiftKey, altKey, ctrlKey, metaKey } = e;
+            vpRef.current?.dispatchEvent(new KeyboardEvent('keydown', { key, code, shiftKey, altKey, ctrlKey, metaKey, bubbles: true, cancelable: true }));
           }}
         />
       )}
