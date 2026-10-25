@@ -3,6 +3,7 @@
  * Loading the real editor (Tiptap) on hover would undo its lazy loading, so this reads the small
  * Markdown subset the editor writes (see notesText.ts) and stops once a card's worth is filled.
  */
+import { ENTITY, entityChar } from './notesText';
 
 export type Span = { text: string; b?: true; i?: true; s?: true; code?: true; href?: string };
 
@@ -78,10 +79,20 @@ export function parseInline(src: string, style: Style = {}): Span[] {
   while (i < src.length) {
     const c = src[i];
     const rest = src.slice(i);
-    if (c === '\\' && i + 1 < src.length && /[\\`*_{}[\]()#+\-.!|>~<]/.test(src[i + 1])) {
+    // A backslash makes any ASCII punctuation literal (so "\\&amp;" stays "&amp;").
+    if (c === '\\' && i + 1 < src.length && /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/.test(src[i + 1])) {
       buf += src[i + 1];
       i += 2;
       continue;
+    }
+    // "&amp;" → "&" etc., as the editor shows it (KAN-46). The result is plain text, never markup.
+    if (c === '&') {
+      const m = ENTITY.exec(rest);
+      if (m) {
+        buf += entityChar(m);
+        i += m[0].length;
+        continue;
+      }
     }
     if (c === '`') {
       const end = src.indexOf('`', i + 1);

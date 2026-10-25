@@ -98,3 +98,38 @@ describe('notes preview blocks', () => {
     expect(notesPreviewBlocks('')).toEqual({ blocks: [], more: false });
   });
 });
+
+describe('special characters in the notes preview (KAN-46)', () => {
+  const text = (md: string) => parseInline(md).map((s) => s.text).join('');
+
+  it('shows characters as typed, not as the entities the editor saves them as', () => {
+    // Exactly what the editor stored for: R&D3 <b>x</b> "q" 'a' a>b 5 < 6 & ©
+    expect(text(`R&amp;D3 &lt;b&gt;x&lt;/b&gt; "q" 'a' a&gt;b 5 &lt; 6 &amp; ©`)).toBe(`R&D3 <b>x</b> "q" 'a' a>b 5 < 6 & ©`);
+    expect(text('nbsp: end')).toBe('nbsp: end');
+  });
+
+  it('decodes what the editor decodes, and nothing more', () => {
+    expect(text('&quot;q&quot; &#39;s&#39; &#169; &#x263A;')).toBe(`"q" 's' © ☺`);
+    // Typed literally as "&amp;" / "&copy;": the editor saves "&amp;amp;" / "&amp;copy;".
+    expect(text('&amp;amp; &amp;copy;')).toBe('&amp; &copy;');
+    // Named entities the editor doesn't decode, and things that only look like one, stay.
+    expect(text('&copy; &nbsp; &bogus; & ;amp; &amp')).toBe('&copy; &nbsp; &bogus; & ;amp; &amp');
+    expect(text('&#0; &#xD800;')).toBe('� �');
+  });
+
+  it('keeps escaped entities and code literal, and never turns a decoded character into markup', () => {
+    expect(text('\\&amp;')).toBe('&amp;');
+    expect(parseInline('`a&amp;b<c>`')).toEqual([{ code: true, text: 'a&amp;b<c>' }]);
+    expect(parseInline('&#42;not bold&#42;')).toEqual([{ text: '*not bold*' }]);
+  });
+
+  it('works in every kind of block', () => {
+    const md = '# R&amp;D\n\n- R&amp;D3\n- [ ] a &lt; b\n\n> x &gt; y\n\n| A&amp;B |\n| --- |\n| 1 &lt; 2 |\n\n```\nx &amp;&amp; y\n```';
+    const blocks = notesPreviewBlocks(md, 40).blocks;
+    const all = JSON.stringify(blocks);
+    for (const s of ['R&D', 'R&D3', 'a < b', 'x > y', 'A&B', '1 < 2']) expect(all).toContain(s);
+    // Text is decoded everywhere; only the code block keeps what was typed.
+    expect(JSON.stringify(blocks.filter((b) => b.kind !== 'code'))).not.toMatch(/&(amp|lt|gt);/);
+    expect(blocks.at(-1)).toEqual({ kind: 'code', text: 'x &amp;&amp; y' });
+  });
+});

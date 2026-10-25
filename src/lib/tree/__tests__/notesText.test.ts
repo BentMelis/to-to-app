@@ -51,3 +51,9 @@ describe('escaping block syntax inside paragraphs', () => {
     expect(escapeLineStarts('**bold** start, 2024 numbers, -5 degrees')).toBe('**bold** start, 2024 numbers, -5 degrees');
   });
 });
+
+describe('plain-text notes preview: special characters (KAN-46)', () => {
+  it('decodes like the editor', () => {
+    expect(notesPreview('R&amp;D3 &lt;b&gt; &quot;q&quot; &#39;s&#39; &copy; \\&amp;')).toBe(`R&D3 <b> "q" 's' &copy; &amp;`);
+  });
+});
