@@ -118,7 +118,7 @@ function TreeCanvas({
   const [flagMenu, setFlagMenu] = useState<string | null>(null);
   const [moveMenu, setMoveMenu] = useState<string | null>(null);
   // KAN-45: the item's actions in a context menu (right-click, the "⋯" button, or the Menu key / Shift+F10).
-  const [itemMenu, setItemMenu] = useState<{ id: string; at: { x: number; y: number } | DOMRect; via: 'right_click' | 'button' | 'keyboard' } | null>(
+  const [itemMenu, setItemMenu] = useState<{ id: string; via: 'right_click' | 'button' | 'keyboard'; /** Right-click: where on the item, as a fraction of its size. */ fx?: number; fy?: number } | null>(
     null,
   );
   // KAN-20: hide sensitive items, e.g. while screen-sharing. Remembered per browser, for every tree.
@@ -1149,7 +1149,7 @@ function TreeCanvas({
     const act = actEl?.dataset.act;
     if (act === 'menu' && actEl) {
       if (itemMenu?.id === id && itemMenu.via === 'button') setItemMenu(null);
-      else openItemMenu(id, actEl.getBoundingClientRect(), 'button');
+      else openItemMenu(id, 'button');
       return;
     }
     if (act === 'check') toggleDone(id);
@@ -1351,7 +1351,7 @@ function TreeCanvas({
         if (ITEM_MENU && id && (key === 'ContextMenu' || e.shiftKey)) {
           e.preventDefault();
           const el = els.current.get(id);
-          if (el) openItemMenu(id, el.getBoundingClientRect(), 'keyboard');
+          if (el) openItemMenu(id, 'keyboard');
         }
         break;
       case 'Delete':
@@ -1405,11 +1405,14 @@ function TreeCanvas({
 
   /* ---------- Render ---------- */
   /* ---------- Item menu (KAN-45) ---------- */
-  function openItemMenu(id: string, at: { x: number; y: number } | DOMRect, via: 'right_click' | 'button' | 'keyboard') {
+  function openItemMenu(id: string, via: 'right_click' | 'button' | 'keyboard', at?: { x: number; y: number }) {
     if (!ITEM_MENU) return;
     setSel(id);
     setPreview(null);
-    setItemMenu({ id, at, via });
+    // Remember where on the item it was opened, so the menu stays on that spot while the camera moves the item.
+    const r = els.current.get(id)?.getBoundingClientRect();
+    const frac = (v: number, a: number, size: number) => (size ? Math.max(0, Math.min(1, (v - a) / size)) : 0);
+    setItemMenu(at && r ? { id, via, fx: frac(at.x, r.left, r.width), fy: frac(at.y, r.top, r.height) } : { id, via });
     track('item_menu_opened', { via });
   }
   const onCanvasContextMenu = (e: React.MouseEvent) => {
@@ -1418,7 +1421,7 @@ function TreeCanvas({
     const id = el?.dataset.id;
     if (!id) return; // empty canvas: the browser's own menu
     e.preventDefault();
-    openItemMenu(id, { x: e.clientX, y: e.clientY }, 'right_click');
+    openItemMenu(id, 'right_click', { x: e.clientX, y: e.clientY });
   };
   /** Everything you can do with an item, grouped; shortcuts shown next to each. Same actions as the old action bar. */
   function menuEntries(id: string): MenuEntry[] {
@@ -1726,7 +1729,14 @@ function TreeCanvas({
         <ItemMenu
           label={`Actions for ${isStackId(itemMenu.id) ? 'finished items' : sealed.has(itemMenu.id) ? 'sensitive item' : idx.byId.get(itemMenu.id)?.title || 'Untitled'}`}
           entries={menuEntries(itemMenu.id)}
-          at={itemMenu.at}
+          anchor={() => {
+            const el = els.current.get(itemMenu.id);
+            if (!el) return null;
+            if (itemMenu.via === 'button') return (el.querySelector('[data-act="menu"]') ?? el).getBoundingClientRect();
+            const r = el.getBoundingClientRect();
+            if (itemMenu.fx === undefined) return r;
+            return { x: r.left + itemMenu.fx * r.width, y: r.top + (itemMenu.fy ?? 0) * r.height };
+          }}
           onClose={(refocus) => {
             setItemMenu(null);
             if (refocus) focusCanvas();

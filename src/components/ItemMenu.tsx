@@ -19,8 +19,11 @@ interface Props {
   /** Shown for screen readers: what the menu is for. */
   label: string;
   entries: MenuEntry[];
-  /** Right-click: at the pointer. "⋯" button / keyboard: under this box. */
-  at: { x: number; y: number } | DOMRect;
+  /**
+   * Where to show it, read every frame so the menu stays with its item: a point (right-click) or a box to open under
+   * ("⋯" button, keyboard). Null keeps the last position.
+   */
+  anchor: () => { x: number; y: number } | DOMRect | null;
   onClose: (refocus: boolean) => void;
   /** Any other key: close the menu and let the tree handle it as a shortcut on the item (H, D, Delete, Ctrl+Z…). */
   onShortcut?: (e: KeyboardEvent) => void;
@@ -30,33 +33,53 @@ interface Props {
 const MENU_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Enter', 'Escape', 'Tab']);
 const MODIFIERS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Fn', 'AltGraph']);
 
-const isRect = (a: Props['at']): a is DOMRect => 'width' in a;
+const isRect = (a: { x: number; y: number } | DOMRect): a is DOMRect => 'width' in a;
 
 /** A context menu for one tree item (KAN-45): grouped actions with their shortcuts, keyboard-navigable. */
-export function ItemMenu({ label, entries, at, onClose, onShortcut }: Props) {
+export function ItemMenu({ label, entries, anchor, onClose, onShortcut }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   // Place it at the pointer (or under the button) and flip it back inside the viewport near the edges.
+  // It follows its item: when the camera glides to centre the item (right-click selects it), or on pan / zoom.
+  const anchorRef = useRef(anchor);
+  useLayoutEffect(() => {
+    anchorRef.current = anchor;
+  });
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const W = window.innerWidth, H = window.innerHeight, m = 8;
-    const w = el.offsetWidth, h = el.offsetHeight;
-    let x: number, y: number;
-    if (isRect(at)) {
-      x = at.left;
-      y = at.bottom + 6;
-      if (y + h > H - m) y = at.top - h - 6;
-    } else {
-      x = at.x;
-      y = at.y;
-      if (y + h > H - m) y = at.y - h;
-      if (x + w > W - m) x = at.x - w;
-    }
-    el.style.left = `${Math.max(m, Math.min(x, W - w - m))}px`;
-    el.style.top = `${Math.max(m, Math.min(y, H - h - m))}px`;
+    let last = '';
+    let frame = 0;
+    const place = () => {
+      const at = anchorRef.current();
+      if (at) {
+        const W = window.innerWidth, H = window.innerHeight, m = 8;
+        const w = el.offsetWidth, h = el.offsetHeight;
+        let x: number, y: number;
+        if (isRect(at)) {
+          x = at.left;
+          y = at.bottom + 6;
+          if (y + h > H - m) y = at.top - h - 6;
+        } else {
+          x = at.x;
+          y = at.y;
+          if (y + h > H - m) y = at.y - h;
+          if (x + w > W - m) x = at.x - w;
+        }
+        const pos = `${Math.round(Math.max(m, Math.min(x, W - w - m)))},${Math.round(Math.max(m, Math.min(y, H - h - m)))}`;
+        if (pos !== last) {
+          last = pos;
+          const [l, t] = pos.split(',');
+          el.style.left = `${l}px`;
+          el.style.top = `${t}px`;
+        }
+      }
+      frame = requestAnimationFrame(place);
+    };
+    place();
     el.querySelector<HTMLButtonElement>('[role^="menuitem"]')?.focus({ preventScroll: true });
-  }, [at]);
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const away = (e: PointerEvent) => {
