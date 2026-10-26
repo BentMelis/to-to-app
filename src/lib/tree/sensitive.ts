@@ -24,14 +24,3 @@ export const NONE: ReadonlySet<string> = new Set();
 export const loadHideSensitive = () => loadUserPrefs().hideSensitive;
 export const saveHideSensitive = (on: boolean) => saveUserPref('hideSensitive', on);
 
-/* ---------- Automatic hiding (KAN-38) ---------- */
-/*
- * Browsers never tell a page that it's being shared (Zoom, Teams, Meet). Sharing almost always starts by leaving
- * TwigList to click "Share" elsewhere, so every time TwigList loses focus, sensitive items are hidden.
- * Showing them again is always manual (Shift+H or the eye button).
- */
-
-/** True when anything in the tree is marked sensitive (automatic hiding only acts then). */
-export function anySensitive(root: TreeNode): boolean {
-  return root.children.some((c) => !!c.sensitive || anySensitive(c));
-}

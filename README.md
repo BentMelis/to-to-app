@@ -98,10 +98,6 @@ titles, the install manifest, canonical URLs and social previews read from there
   blurred placeholder with none of their content in the DOM, can't be opened, edited or dragged, and are left out of
   meeting lists, the copied agenda, filters, idle markers and the hints on folded branches. The toggle is remembered per
   browser, for all trees (`hideSensitive` in `todo-tree:user-prefs`). Logic in `src/lib/tree/sensitive.ts`.
-- **Automatic hiding** (KAN-38) — browsers can't tell a page it's being shared, but sharing almost always starts by
-  leaving TwigList. So whenever TwigList loses focus (window blur / tab hidden) and the open tree has sensitive items,
-  they are hidden. No setting. Notes, flag and move menus or title editing on a sensitive item close with it.
-  Showing them again is always manual (`Shift+H`).
 - **Item menu** (KAN-45) — right-click an item (or its hover `⋯` button, or `Shift+F10` / the Menu key) for every
   action on it, grouped, with its shortcut next to it; Delete last, in red. Right-click selects first; the browser's own
   menu stays on the empty canvas. Left-click only selects (the old bottom action bar is gone). Closes on `Esc`, outside
@@ -173,7 +169,7 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   help panel shows an *Internal traffic* chip while it's on.
 - **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `todo_completed` (steps), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `sensitive_auto_hidden` (reason: blur), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items), `item_menu_opened` (via: right_click / button / keyboard), `item_menu_action` (action key, e.g. `rename`, `delete`). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items), `item_menu_opened` (via: right_click / button / keyboard), `item_menu_action` (action key, e.g. `rename`, `delete`). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
   [TwigList – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).

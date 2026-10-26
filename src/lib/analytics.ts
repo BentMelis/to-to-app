@@ -143,7 +143,6 @@ export type AppEvent =
   | 'item_moved_to_tree'
   | 'sensitive_marked'
   | 'sensitive_view_toggled'
-  | 'sensitive_auto_hidden'
   | 'items_archived'
   | 'archive_opened'
   | 'archive_restored'

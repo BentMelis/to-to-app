@@ -12,7 +12,7 @@ import { ItemMenu, type MenuEntry } from './ItemMenu';
 import { ITEM_MENU } from '@/lib/flags';
 import { ArchivePanel } from './ArchivePanel';
 import { archiveItem, autoArchive, canArchive, deleteArchived, restoreItem } from '@/lib/tree/archive';
-import { anySensitive, loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
+import { loadHideSensitive, NONE, saveHideSensitive, sealedIds } from '@/lib/tree/sensitive';
 import * as M from '@/lib/tree/model';
 import { applyFilters, matchesFilters, NO_FILTERS, type Filters } from '@/lib/tree/layout';
 import { idleItems, lastActivity } from '@/lib/tree/activity';
@@ -142,7 +142,6 @@ function TreeCanvas({
   const idx = useMemo(() => M.buildIndex(doc.root), [doc]);
   /** Sensitive items and everything inside them, while hidden. */
   const sealed = useMemo(() => (hideSensitive ? sealedIds(doc.root) : NONE), [hideSensitive, doc]);
-  const hasSensitive = useMemo(() => anySensitive(doc.root), [doc]);
 
   const flagsFor = (meetingId: string) => M.collectFlags(doc.root, idx, meetingId).filter((f) => !sealed.has(f.id));
   const flaggedCount = useMemo(() => {
@@ -752,34 +751,6 @@ function TreeCanvas({
   useLayoutEffect(() => {
     latest.current = { doc, idx, vis, editing, store, showToast, setSel, sealed };
   });
-
-  // KAN-38: browsers can't tell us the screen is being shared, but sharing almost always starts by leaving TwigList
-  // (to click "Share" in Zoom or Teams). So every window or tab switch hides sensitive items; showing is manual.
-  // Anything open about a sensitive item (notes, flag or move menu, title editing) closes with it.
-  const hideNow = useCallback(() => {
-    const s = sealedIds(latest.current.doc.root);
-    const drop = (id: string | null) => (id && s.has(id) ? null : id);
-    setNotesFor(drop);
-    setFlagMenu(drop);
-    setMoveMenu(drop);
-    setEditing((e) => (e && s.has(e.id) ? null : e));
-    setHideSensitiveRaw(true);
-    saveHideSensitive(true);
-    track('sensitive_auto_hidden', { reason: 'blur' });
-  }, []);
-  useEffect(() => {
-    if (hideSensitive || !hasSensitive) return;
-    const away = () => {
-      if (document.visibilityState === 'visible' && document.hasFocus()) return;
-      hideNow();
-    };
-    window.addEventListener('blur', away);
-    document.addEventListener('visibilitychange', away);
-    return () => {
-      window.removeEventListener('blur', away);
-      document.removeEventListener('visibilitychange', away);
-    };
-  }, [hideSensitive, hasSensitive, hideNow]);
 
   // KAN-28: finished todos move to the archive a week after they were ticked. Checked when the tree opens and when
   // the day changes. Not an undo step and not activity.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anySensitive, sealedIds } from '../sensitive';
+import { sealedIds } from '../sensitive';
 import { buildIndex, parseDoc, starter, toggleSensitive, worstDueBelow } from '../model';
 import { applyFilters, visibleTree } from '../layout';
 
@@ -46,13 +46,5 @@ describe('sensitive items', () => {
     expect(applyFilters(d.root, idx, { high: true, dueSoon: false }, '2026-10-21')!.matches).toBe(1);
     expect(worstDueBelow(p1, idx, '2026-10-21')).toBe('urgent');
     expect(worstDueBelow(p1, idx, '2026-10-21', s)).toBeNull();
-  });
-});
-
-describe('automatic hiding (KAN-38)', () => {
-  it('only acts when there is something to hide', () => {
-    const { d } = doc();
-    expect(anySensitive(d.root)).toBe(true);
-    expect(anySensitive(starter().root)).toBe(false);
   });
 });

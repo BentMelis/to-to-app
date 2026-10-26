@@ -107,7 +107,7 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         <button
           className={'tb sensitive-toggle' + (p.hideSensitive ? ' on' : '')}
           aria-pressed={p.hideSensitive}
-          title={p.hideSensitive ? 'Sensitive items are hidden. Show them (Shift+H)' : 'Hide sensitive items, e.g. while sharing your screen (Shift+H). They also hide by themselves when you switch to another window.'}
+          title={p.hideSensitive ? 'Sensitive items are hidden. Show them (Shift+H)' : 'Hide sensitive items, e.g. while sharing your screen (Shift+H)'}
           onClick={p.onHideSensitive}
         >
           {p.hideSensitive ? <IconEyeOff /> : <IconEye />}
