@@ -1,10 +1,10 @@
 import type { Metadata } from 'next';
-import TreesApp from '@/components/TreesApp';
+import AppRoot from '@/components/AppRoot';
 
 export const metadata: Metadata = {
   title: 'TwigList',
 };
 
 export default function AppPage() {
-  return <TreesApp />;
+  return <AppRoot />;
 }

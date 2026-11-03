@@ -1,4 +1,5 @@
 import { CookieSettings, InternalTrafficNote } from './ConsentBanner';
+import { signInAvailable } from '@/lib/cloud/config';
 
 const SHORTCUTS: [React.ReactNode, string][] = [
   [<kbd key="t">Tab</kbd>, 'Add inside the selected item (then P, T or N)'],
@@ -39,6 +40,15 @@ export function HelpPanel() {
       </table>
       <h2 style={{ marginTop: 16 }}>Several trees</h2>
       <p className="lead">Keep areas of your life apart: work, personal, a side project. Each tree has its own projects, meetings, filters and settings. Switch with the tree name in the top-left corner, or press <kbd>W</kbd> and a number. Rename the top of a tree to rename the tree.</p>
+      {signInAvailable && (
+        <>
+          <h2 style={{ marginTop: 16 }}>Your trees on every device</h2>
+          <p className="lead">
+            Without an account, your trees are saved in this browser. <b>Sign in</b> (top right) to keep them in your account and see the same
+            trees on your laptop and phone. Changes sync by themselves, also after working offline.
+          </p>
+        </>
+      )}
       <h2 style={{ marginTop: 16 }}>Doing things with an item</h2>
       <p className="lead">Right-click an item, or click its <b>⋯</b> button, for everything you can do with it. Each action shows its shortcut, so you can skip the menu next time.</p>
       <h2 style={{ marginTop: 16 }}>Moving things</h2>

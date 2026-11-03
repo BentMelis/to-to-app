@@ -22,6 +22,8 @@ export type SaveStatus = 'loading' | 'saving' | 'saved' | 'error';
  */
 const sessions = new Map<string, History>();
 export const forgetSession = (key: string) => sessions.delete(key);
+/** Signing in or out: tree ids can repeat between the browser and an account, so start clean. */
+export const forgetAllSessions = () => sessions.clear();
 
 /** Tree document + undo/redo history + persistence through a storage adapter. */
 export function useTreeStore(adapter: StorageAdapter, key = 'default') {
@@ -29,16 +31,26 @@ export function useTreeStore(adapter: StorageAdapter, key = 'default') {
   const [status, setStatus] = useState<SaveStatus>(() => (sessions.has(key) ? 'saved' : 'loading'));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loaded = useRef(sessions.has(key));
+  /** The last version saved (or loaded as-is): changes are compared against it, so nothing is saved twice. */
+  const savedDoc = useRef<TreeDoc | null>(sessions.get(key)?.doc ?? null);
 
   useEffect(() => {
     if (loaded.current) return;
     let alive = true;
-    adapter.load().then((doc) => {
-      if (!alive) return;
-      loaded.current = true;
-      setH({ doc: doc ?? starter(), past: [], future: [] });
-      setStatus('saved');
-    });
+    adapter.load().then(
+      (doc) => {
+        if (!alive) return;
+        loaded.current = true;
+        const d = doc ?? starter();
+        // A tree from the account is already stored in the current format: opening it must not save it again
+        // (that would make a new version on every open, and false "changed on another device" conflicts).
+        // A tree in this browser is saved once on open, so an older format gets upgraded in storage.
+        if (doc && adapter.kind === 'remote') savedDoc.current = d;
+        setH({ doc: d, past: [], future: [] });
+        setStatus('saved');
+      },
+      () => alive && setStatus('error'),
+    );
     return () => {
       alive = false;
     };
@@ -51,7 +63,6 @@ export function useTreeStore(adapter: StorageAdapter, key = 'default') {
 
   // Debounced save whenever the document changes.
   const doc = h?.doc;
-  const savedDoc = useRef<TreeDoc | null>(sessions.get(key)?.doc ?? null);
   useEffect(() => {
     if (!doc || !loaded.current || doc === savedDoc.current) return;
     savedDoc.current = doc;
@@ -64,6 +75,17 @@ export function useTreeStore(adapter: StorageAdapter, key = 'default') {
       );
     }, 300);
   }, [doc, adapter]);
+
+  // Another version from the account (another device, or "Use that version"): a new undo step, so undo brings
+  // back what was on screen. Synced versions aren't saved back (the account already has them).
+  useEffect(() => {
+    if (!adapter.subscribe) return;
+    return adapter.subscribe((remote, { persist }) => {
+      if (!loaded.current) return;
+      if (!persist) savedDoc.current = remote;
+      setH((s) => (s ? { doc: remote, past: [...s.past.slice(-HISTORY + 1), s.doc], future: [] } : s));
+    });
+  }, [adapter]);
 
   /** Apply a change as a new undo step. */
   // Every change stamps the items it touched, which drives the idle heads-up (see activity.ts).

@@ -29,7 +29,7 @@ export function ConsentBanner() {
       <h2 id="consent-title">Can we count your visit?</h2>
       <p id="consent-text">
         With your permission we use Google Analytics to see how TwigList is used: which pages, and actions like creating a tree. Never what you
-        write: your projects, todos and notes stay in your browser.
+        write: your projects, todos and notes are never sent to Google.
       </p>
       <div className="consent-actions">
         <button type="button" className="consent-btn" onClick={() => setConsent('denied')}>

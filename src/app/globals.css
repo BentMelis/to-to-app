@@ -604,3 +604,43 @@ kbd { font-family: var(--font-ui); font-size: 11px; border: 1px solid var(--edge
 /* Internal traffic marker (help panel) */
 .internal-chip { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 700;
   background: var(--chip); color: var(--muted); vertical-align: 1px; }
+
+/* ---------- Account: sign in, account menu, moving local trees (KAN-41, KAN-43) ---------- */
+.tb.sign-in { gap: 6px; }
+.account-button { width: 34px; overflow: hidden; }
+.account-button img { width: 26px; height: 26px; border-radius: 50%; display: block; }
+.account-initial { width: 26px; height: 26px; border-radius: 50%; background: var(--leaf); color: var(--leaf-ink); display: grid; place-items: center;
+  font-weight: 700; font-size: 13px; }
+.account-button.unsynced { box-shadow: inset 0 0 0 1.5px var(--soon); }
+.account-panel { width: 320px; max-width: calc(100vw - 24px); padding: 14px; }
+.account-panel h2 { font-family: var(--font-head); font-size: 18px; margin: 0 0 6px; }
+.account-panel p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; color: var(--muted); }
+.account-panel .fine { font-size: 12.5px; margin: 12px 0 0; }
+.sign-in-methods { display: grid; gap: 8px; }
+.sign-in-method { height: 42px; border-radius: 10px; border: 1.5px solid var(--edge); background: var(--surface); color: var(--ink); font: inherit;
+  font-size: 15px; font-weight: 700; cursor: pointer; }
+.sign-in-method:hover:not(:disabled), .sign-in-method:focus-visible { border-color: var(--leaf); background: var(--leaf-soft); outline: none; }
+.sign-in-method:disabled { opacity: .6; cursor: default; }
+.account-error { color: var(--danger) !important; margin: 10px 0 0 !important; }
+.account-menu { padding: 8px; }
+.account-who { padding: 6px 8px 2px; display: grid; gap: 1px; min-width: 0; }
+.account-who b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-who span { font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-sync { margin: 2px 8px 8px !important; font-size: 12.5px !important; display: flex; align-items: center; gap: 6px; }
+.account-sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--leaf); flex: none; }
+.account-sync.s-saving::before { background: var(--bark); }
+.account-sync.s-offline::before, .account-sync.s-error::before { background: var(--soon); }
+.account-actions { display: flex; gap: 6px; }
+.account-actions.column { flex-direction: column; gap: 0; border-top: 1px solid var(--edge); padding-top: 6px; }
+.account-panel .pick { display: block; font-size: 14.5px; }
+.account-panel .pick.danger { color: var(--danger); }
+.account-panel .pick.danger:hover, .account-panel .pick.danger:focus-visible { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.account-confirm { border-top: 1px solid var(--edge); padding: 10px 8px 2px; }
+.account-confirm p { color: var(--ink); }
+.account-confirm .pick { width: auto; border: 1.5px solid var(--edge); }
+.move-trees { width: min(520px, 100%); gap: 4px; }
+.move-trees p { margin: 8px 0 0; line-height: 1.5; }
+.move-trees .fine { font-size: 13px; color: var(--muted); }
+.move-trees .notes-foot { margin-top: 16px; }
+button.link { border: none; background: none; padding: 0; color: var(--leaf); font: inherit; text-decoration: underline; cursor: pointer; }
+.boot-error { display: grid; justify-items: center; }

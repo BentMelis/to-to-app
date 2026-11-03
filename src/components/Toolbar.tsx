@@ -2,6 +2,7 @@
 
 import { forwardRef } from 'react';
 import type { SaveStatus } from '@/lib/tree/useTreeStore';
+import type { SyncState } from '@/lib/cloud/library';
 import { anyFilter, type Filters } from '@/lib/tree/layout';
 import { IconArchive, IconChevron, IconEye, IconEyeOff, IconDownload, IconFilter, IconFocus, IconMeetings, IconMinus, IconPlus, IconRedo, IconUndo, IconUpload } from './icons';
 
@@ -12,7 +13,19 @@ const STATUS: Record<SaveStatus, string> = {
   error: 'Couldn’t save. Export a backup to be safe.',
 };
 
+/** Signed in: what the account has (the canvas status only says whether this browser has it). */
+function cloudStatus(status: SaveStatus, sync: SyncState) {
+  if (status === 'loading') return '';
+  if (sync === 'offline') return 'Offline: changes will sync';
+  if (sync === 'error') return 'Couldn’t save to your account. Retrying…';
+  if (status === 'saving' || sync === 'saving') return 'Saving…';
+  return 'Saved to your account';
+}
+
 interface Props {
+  /** Set when signed in. */
+  sync?: SyncState;
+  account?: React.ReactNode;
   hideSensitive: boolean;
   onHideSensitive: () => void;
   treeName: string;
@@ -136,7 +149,7 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         </button>
       </div>
       <span className="status" aria-live="polite">
-        {STATUS[p.status]}
+        {p.sync ? cloudStatus(p.status, p.sync) : STATUS[p.status]}
       </span>
       <div className="spacer" />
       <div className="group">
@@ -165,6 +178,7 @@ export const Toolbar = forwardRef<HTMLElement, Props>(function Toolbar(p, ref) {
         <button className="tb icon" aria-label="Restore this tree from a backup" title="Restore this tree from a backup" onClick={p.onImport}>
           <IconUpload />
         </button>
+        {p.account}
         <button className="tb icon" aria-label="How it works and shortcuts" aria-expanded={p.helpOpen} onClick={p.onHelp}>
           ?
         </button>

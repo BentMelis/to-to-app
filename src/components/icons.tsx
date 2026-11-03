@@ -113,3 +113,9 @@ export const IconArchive = () => (
     <path d="M3.2 6.2V12a1.3 1.3 0 0 0 1.3 1.3h7a1.3 1.3 0 0 0 1.3-1.3V6.2M6.5 8.8h3" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
   </svg>
 );
+export const IconUser = () => (
+  <svg viewBox="0 0 16 16" aria-hidden="true">
+    <circle cx="8" cy="5.5" r="2.75" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <path d="M2.75 14c.6-2.9 2.75-4.4 5.25-4.4s4.65 1.5 5.25 4.4" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+);

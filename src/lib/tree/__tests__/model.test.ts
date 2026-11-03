@@ -298,3 +298,17 @@ describe('notes panel', () => {
     expect(M.pathTo(M.buildIndex(doc().root), 't2')).toEqual(['P1']);
   });
 });
+
+describe('untouched sample (moving local trees to an account)', () => {
+  it('recognises the sample as it comes, and anything changed in it', async () => {
+    const { starter, isUntouchedSample, parseDoc, toggleDone } = await import('../model');
+    const s = parseDoc(JSON.parse(JSON.stringify(starter())))!;
+    expect(isUntouchedSample(s)).toBe(true);
+    const renamed = structuredClone(s);
+    renamed.root.children[0].title = 'Client A';
+    expect(isUntouchedSample(renamed)).toBe(false);
+    const open = s.root.children[0].children.find((c) => c.type === 'todo' && !c.done && !c.children.length);
+    if (open) expect(isUntouchedSample(toggleDone(s, open.id)!.doc)).toBe(false);
+    expect(isUntouchedSample({ ...s, meetings: [] })).toBe(false);
+  });
+});

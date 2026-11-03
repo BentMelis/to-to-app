@@ -148,7 +148,12 @@ export type AppEvent =
   | 'archive_restored'
   | 'archive_deleted'
   | 'item_menu_opened'
-  | 'item_menu_action';
+  | 'item_menu_action'
+  | 'signed_in'
+  | 'signed_out'
+  | 'account_deleted'
+  | 'sync_conflict'
+  | 'local_trees_moved';
 
 export function track(event: AppEvent, params?: Record<string, string | number | boolean>) {
   if (!loaded || typeof window === 'undefined' || !window.gtag || getConsent() !== 'granted') return;

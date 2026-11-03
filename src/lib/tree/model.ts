@@ -174,6 +174,17 @@ export function parseDoc(input: unknown): TreeDoc | null {
   return null;
 }
 
+/** The sample tree as it comes, nothing changed (its ids and times differ per start, so compare the content). */
+export function isUntouchedSample(doc: TreeDoc): boolean {
+  const shape = (n: TreeNode): unknown => [n.type, n.title, n.done, n.notes ?? '', n.high ?? false, n.due ?? '', n.flags ?? null, n.sensitive ?? false, n.children.map(shape)];
+  const s = starter();
+  return (
+    JSON.stringify(shape(doc.root)) === JSON.stringify(shape(s.root)) &&
+    JSON.stringify(doc.meetings.map((m) => [m.name, m.color])) === JSON.stringify(s.meetings.map((m) => [m.name, m.color])) &&
+    !doc.archive?.length
+  );
+}
+
 /* ---------- Indexing & derived data ---------- */
 
 export interface TreeIndex {

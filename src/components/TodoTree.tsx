@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { exportDoc, importDoc, prefs, type StorageAdapter } from '@/lib/storage';
+import type { SyncState } from '@/lib/cloud/library';
 import { loadUserPrefs, saveUserPref } from '@/lib/storage/userPrefs';
 import { track } from '@/lib/analytics';
 import { addToRoot, insertAt, planMove } from '@/lib/tree/moveTree';
@@ -48,6 +49,10 @@ export interface TreeProps {
   treeId: string;
   treeName: string;
   adapter: StorageAdapter;
+  /** The "Sign in" / account button (shown where backup download/restore are). */
+  account?: React.ReactNode;
+  /** Signed in: whether everything is saved to the account. */
+  sync?: SyncState;
   treeMenuOpen: boolean;
   /** Open the tree switcher, anchored on its toolbar button. */
   onTreeMenu: () => void;
@@ -72,6 +77,8 @@ export default function TodoTree(props: TreeProps) {
 function TreeCanvas({
   store,
   doc,
+  account,
+  sync,
   treeId,
   treeName,
   treeMenuOpen,
@@ -1506,6 +1513,8 @@ function TreeCanvas({
         canUndo={store.canUndo}
         canRedo={store.canRedo}
         status={store.status}
+        sync={sync}
+        account={account}
         helpOpen={help}
         meetingsOpen={panel === 'meetings'}
         flaggedCount={flaggedCount}

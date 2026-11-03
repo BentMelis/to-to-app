@@ -1,4 +1,4 @@
-import { parseDoc } from '@/lib/tree/model';
+import { isUntouchedSample, parseDoc } from '@/lib/tree/model';
 import { firstList, FIRST_TREE_ID, FIRST_TREE_NAME, parseList, type TreeList } from '@/lib/tree/trees';
 import type { TreeDoc } from '@/lib/tree/types';
 
@@ -10,6 +10,11 @@ export interface StorageAdapter {
   readonly kind: 'local' | 'remote';
   load(): Promise<TreeDoc | null>;
   save(doc: TreeDoc): Promise<void>;
+  /**
+   * Another version arrives while the tree is open (synced from another device, or "Use that version" after a
+   * conflict). `persist`: save it as a normal change; otherwise it's what the account already has.
+   */
+  subscribe?(listener: (doc: TreeDoc, opts: { persist: boolean }) => void): () => void;
 }
 
 /**
@@ -147,6 +152,45 @@ const slug = (s: string) =>
     .replace(/[^\w]+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40) || 'tree';
+
+/** Trees in this browser that hold the user's own work (not the sample tree exactly as it came). */
+export function localTreesWithContent(): { list: TreeList; ids: string[] } | null {
+  const list = parseList(get(LIST_KEY));
+  if (!list) return null;
+  const ids = list.trees
+    .filter((t) => {
+      const raw = get(docKey(t.id));
+      const doc = raw ? parseDoc(raw) : null;
+      return !!doc && !isUntouchedSample(doc);
+    })
+    .map((t) => t.id);
+  return ids.length ? { list, ids } : null;
+}
+
+/**
+ * After local trees were moved to the account: forget them in this browser. A fresh list is written
+ * (instead of none) so the old single-tree storage isn't migrated in again.
+ */
+export function forgetLocalTrees(ids: string[]) {
+  const list = parseList(get(LIST_KEY));
+  ids.forEach((id) => {
+    del(docKey(id));
+    PREF_KINDS.forEach((k) => del(prefKey(k, id)));
+    adapters.delete(id);
+  });
+  const left = list?.trees.filter((t) => !ids.includes(t.id)) ?? [];
+  set(LIST_KEY, JSON.stringify(left.length ? { trees: left, lastOpenedId: left[0].id } : firstList()));
+}
+
+/** Download several trees as one JSON file (safety copy before moving them to an account). */
+export function exportAllDocs(trees: { name: string; doc: TreeDoc }[]) {
+  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), trees }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `twiglist-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
 /** Download one tree as a JSON backup. The root carries the tree's name. */
 export function exportDoc(doc: TreeDoc, treeName: string) {

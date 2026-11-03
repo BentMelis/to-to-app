@@ -118,6 +118,8 @@ src/
     TodoTree.tsx        The canvas for one tree: state, camera (pan/zoom/focus), keyboard, drag & drop
     TreeNodeView.tsx    A single item + the finished-items stack card
     ItemMenu.tsx        Right-click / "⋯" menu with every action on an item (KAN-45)
+    AppRoot.tsx         Local or signed in: sign-in, moving local trees, sign-out, account deletion
+    Account.tsx         Sign-in panel, account button + menu, "Move your trees?" dialog
     MeetingsPanel.tsx   Per meeting/person: to ask, to mention; manage meetings
     FlagMenu.tsx        "Bring up … at" menu (ask / mention per meeting)
     DuePicker.tsx       Set / change / remove a deadline
@@ -136,9 +138,65 @@ src/
     tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout
     tree/useTreeStore.ts  Document + undo/redo + debounced persistence
+    cloud/              Signed in: Firebase Auth (client), API calls, CloudLibrary (sync, offline, conflicts), migration
+    server/             API side: config, MongoDB client, token check, data access (store.ts)
     storage/index.ts    Library (list + one document per tree), StorageAdapter, per-tree preferences, import/export
 public/sw.js            Offline service worker (production only)
 ```
+
+## Accounts & sync (KAN-11, KAN-39 – KAN-43)
+
+TwigList is free and works without an account: trees are kept in this browser (below). **Signing in** (Google or
+Microsoft) keeps them in the account instead, synced across devices. Firebase is used **only for sign-in**; the trees are
+stored in **MongoDB** through our own API, so the browser never talks to the database.
+
+**Setup.** Copy `.env.example` to `.env.local` and fill it in (and add the same names in Vercel). Without these values the
+app is exactly the local-only app: no *Sign in* button, and `/api/*` answers 503.
+
+| Variable | What | Secret |
+| --- | --- | --- |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`, `…_AUTH_DOMAIN`, `…_PROJECT_ID`, `…_APP_ID` | Firebase web app config (read at build time) | no |
+| `MONGODB_URI`, `MONGODB_DB` | MongoDB Atlas connection string and database name (default `twiglist`) | **yes** |
+
+In Firebase: *Authentication → Sign-in method*: enable **Google** and **Microsoft** (Microsoft needs an app registration in
+Microsoft Entra ID with the redirect URI Firebase shows). *Authentication → Settings → Authorized domains*: add
+`twiglist.app` and the Vercel preview domain. Use separate Firebase projects and MongoDB databases for dev and prod.
+
+**How it works**
+
+- `src/lib/cloud/auth.ts`: Firebase Auth, loaded only when someone signs in (or was signed in before in this browser), so
+  local-only users never download it. Popup sign-in, redirect when popups are blocked.
+- `src/app/api/…`: Next.js route handlers. Every request carries the Firebase ID token, verified with `firebase-admin`
+  (`src/lib/server/auth.ts`); every query is scoped to that user (`src/lib/server/store.ts`). No service account key:
+  verifying a token only needs the project id (Google's public keys). *Delete my account* deletes the data on the
+  server, then the browser deletes the Firebase account (`deleteAccount` in `src/lib/cloud/auth.ts`); if the sign-in
+  isn't recent, Firebase asks to confirm it first, before anything is deleted.
+
+  | Method | Path | What |
+  | --- | --- | --- |
+  | GET / PATCH | `/api/trees` | The list (no documents) / reorder `{ order }` |
+  | GET / PUT / PATCH / DELETE | `/api/trees/:id` | Read / save `{ doc, rev }` (rev 0 creates; stale rev → 409 with `current`) / rename / soft delete |
+  | POST | `/api/trees/:id/restore` | Undo a delete |
+  | GET / DELETE | `/api/me` | Profile (created on first sign-in) / delete all the account's data (the browser then deletes the sign-in) |
+  | GET | `/api/me/export` | All data as JSON |
+  | GET | `/api/status` | Whether accounts & sync are configured (no data) |
+
+- `src/lib/cloud/library.ts`: the `CloudLibrary` implements the same `Library`/`StorageAdapter` interfaces as browser
+  storage. Saves send the `rev` they're based on. **Conflicts**: last write wins, and the other version is offered
+  (*Use the other version*), so nothing is lost silently. **Other devices**: changes are picked up on focus and every
+  30 s; they arrive as an undo step. **Offline**: the account's trees and unsynced changes are cached in this browser
+  (`todo-tree:cloud:<uid>:…`) and sent when back online. Signing out clears the cache.
+- **First sign-in**: trees in this browser (except the untouched sample) can be moved into the account
+  (`src/lib/cloud/migrate.ts`); a taken name gets “(this browser)”, max 10 trees. Later also from the account menu.
+- Data model: `users` (`_id` = Firebase UID) and `trees` (one document per tree: `ownerId`, `treeId`, `name`, `order`,
+  `doc`, `rev`, `deletedAt`…), unique index `{ ownerId, treeId }`. Deleted trees are kept 30 days, then purged. See
+  Confluence *TwigList – Cloud data model*.
+- The service worker never caches `/api/*`.
+
+**Tests**: `npm test` runs everything; the MongoDB tests (`src/lib/server/__tests__`) run when `MONGODB_TEST_URI` points
+at a MongoDB (e.g. `docker run -p 27017:27017 mongo:8`, then `MONGODB_TEST_URI=mongodb://127.0.0.1:27017 npm test`).
+Locally you can sign in without Google/Microsoft through the Firebase Auth emulator
+(`npx firebase-tools emulators:start --only auth`, see the emulator lines in `.env.example`).
 
 ## Data & storage
 
@@ -151,6 +209,8 @@ renaming them would strand the data people already have.
 | `todo-tree:tree:<id>` | One tree: its root, meetings and settings (`TreeDoc`) |
 | `todo-tree:view:<id>`, `todo-tree:filters:<id>`, `todo-tree:meeting:<id>` | Per-tree viewing preferences (camera, filters, last meeting tab) |
 | `todo-tree:user-prefs` | View preferences for all trees (KAN-44): `focus`, `hideDone`, `hideSensitive`. Defaults: focus on, everything shown. `src/lib/storage/userPrefs.ts`; replaces the old `todo-tree:hide-sensitive` key. Moves to the account with KAN-43 |
+| `todo-tree:account` | Signed in: who (uid, name, email, photo), so the app knows to load Firebase at start. Not a credential |
+| `todo-tree:cloud:<uid>:…` | Signed in: cache of the account's trees and unsynced changes (offline). Cleared on sign-out |
 | `todo-tree:v1` | The single tree from before multiple trees (and the POC). Migrated into the first tree on first start and left untouched as a safety copy |
 
 Storage goes through the `Library` and `StorageAdapter` interfaces in `src/lib/storage`, so a server-backed version
@@ -169,7 +229,7 @@ Google Analytics 4 (`G-NE8N3PVBMS`, override with `NEXT_PUBLIC_GA_ID`), see `src
   help panel shows an *Internal traffic* chip while it's on.
 - **No content, ever.** Events only say what happened: `open_app` (from nav/hero/closing/footer), `todo_completed` (steps), `tree_created`,
   `tree_switched`, `tree_deleted`, `notes_opened`, `filter_used` (which filters), `meeting_list_copied`, `backup_downloaded`,
-  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items), `item_menu_opened` (via: right_click / button / keyboard), `item_menu_action` (action key, e.g. `rename`, `delete`). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
+  `backup_restored`, `item_moved_to_tree` (kind, items, flags kept/dropped), `sensitive_marked` (on), `sensitive_view_toggled` (hidden), `items_archived` (how, items, kind), `archive_opened`, `archive_restored`, `archive_deleted` (items), `item_menu_opened` (via: right_click / button / keyboard), `item_menu_action` (action key, e.g. `rename`, `delete`), `signed_in` (method), `signed_out`, `account_deleted`, `sync_conflict`, `local_trees_moved` (trees, left). Never titles, notes, tree or meeting names. Google signals and ad personalisation are off.
 - To add an event: add its name to `AppEvent`, call `track('name')`, and add it to the Confluence page
   [TwigList – Analytics events](https://eanv.atlassian.net/wiki/spaces/SideQuest/pages/22183938/Todo+Tree+Analytics+events)
   (what fires when, parameters, file:line).

@@ -8,6 +8,7 @@ import { BreakDown, DueSoon, FinishIt, Prepared } from './FlowDemos';
 import { McpDemo } from './McpDemo';
 import { track } from '@/lib/analytics';
 import { CookieSettings } from '../ConsentBanner';
+import { signInAvailable } from '@/lib/cloud/config';
 
 /** Someone who already has trees in this browser gets "Open your trees"; the installed app skips the landing page. */
 function useReturning() {
@@ -164,7 +165,11 @@ export default function Landing() {
                 See how it works
               </a>
             </div>
-            <p className="fine">Free, in your browser. No account, and your trees stay on your device.</p>
+            <p className="fine">
+              {signInAvailable
+                ? 'Free, in your browser. No account needed; sign in to sync your trees across devices.'
+                : 'Free, in your browser. No account, and your trees stay on your device.'}
+            </p>
           </div>
           <HeroTree />
         </section>
@@ -224,10 +229,18 @@ export default function Landing() {
         </section>
 
         <section className="privacy" aria-label="Your data">
-          <p>
-            Your trees live <em>in your browser</em>. No account, nothing you write leaves your device, and it works offline. Sync between your
-            devices is next on the roadmap.
-          </p>
+          {signInAvailable ? (
+            <p>
+              Without an account, your trees live <em>in your browser</em> and nothing you write leaves your device. Sign in with Google or
+              Microsoft to keep them in your account instead, stored in the EU and synced between your devices. It works offline either way,
+              and you can download or delete everything at any time.
+            </p>
+          ) : (
+            <p>
+              Your trees live <em>in your browser</em>. No account, nothing you write leaves your device, and it works offline. Sync between your
+              devices is next on the roadmap.
+            </p>
+          )}
         </section>
 
         <section className="closing" aria-labelledby="closing-title">
