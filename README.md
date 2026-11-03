@@ -166,8 +166,9 @@ Microsoft Entra ID with the redirect URI Firebase shows). *Authentication → Se
 
 - `src/lib/cloud/auth.ts`: Firebase Auth, loaded only when someone signs in (or was signed in before in this browser), so
   local-only users never download it. Popup sign-in, redirect when popups are blocked.
-- `src/app/api/…`: Next.js route handlers. Every request carries the Firebase ID token, verified with `firebase-admin`
-  (`src/lib/server/auth.ts`); every query is scoped to that user (`src/lib/server/store.ts`). No service account key:
+- `src/app/api/…`: Next.js route handlers. Every request carries the Firebase ID token, verified with `jose` against Google's
+  public keys, as Firebase documents for third-party JWT libraries (`src/lib/server/auth.ts`; no `firebase-admin`,
+  whose token code didn't load on Vercel); every query is scoped to that user (`src/lib/server/store.ts`). No service account key:
   verifying a token only needs the project id (Google's public keys). *Delete my account* deletes the data on the
   server, then the browser deletes the Firebase account (`deleteAccount` in `src/lib/cloud/auth.ts`); if the sign-in
   isn't recent, Firebase asks to confirm it first, before anything is deleted.
