@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SignInError, signInMessage, type AccountHint, type Method } from '@/lib/cloud/auth';
+import { api } from '@/lib/cloud/api';
 import type { SyncState } from '@/lib/cloud/library';
 import { IconUser } from './icons';
 
@@ -165,6 +166,7 @@ export function AccountMenu({ account, sync, localCount, onMoveLocal, onExport, 
         </div>
       ) : (
         <div className="account-actions column">
+          <ConnectedApps />
           {localCount > 0 && (
             <button className="pick" onClick={onMoveLocal}>
               Move {localCount} tree{localCount === 1 ? '' : 's'} from this browser…
@@ -185,6 +187,79 @@ export function AccountMenu({ account, sync, localCount, onMoveLocal, onExport, 
         <p className="account-error" role="alert">
           {error}
         </p>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Connected apps (MCP) ---------- */
+
+type Connection = { clientId: string; name: string; since: string; lastUsed: string | null };
+const ago = (iso: string) => {
+  const d = Math.round((Date.now() - Date.parse(iso)) / 86_400_000);
+  return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+};
+
+/** AI apps (e.g. Claude) connected through MCP, each with Disconnect; and the address to connect one. */
+function ConnectedApps() {
+  const [open, setOpen] = useState(false);
+  const [list, setList] = useState<Connection[] | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const url = typeof window !== 'undefined' ? `${window.location.origin}/api/mcp` : '/api/mcp';
+  const load = () =>
+    api<{ connections: Connection[] }>('/api/me/connections').then(
+      (r) => setList(r.connections),
+      () => setFailed(true),
+    );
+  return (
+    <div className="connected-apps">
+      <button
+        className="pick"
+        aria-expanded={open}
+        onClick={() => {
+          if (!open && !list) void load();
+          setOpen((o) => !o);
+        }}
+      >
+        Connected apps (AI){list?.length ? ` · ${list.length}` : ''}
+      </button>
+      {open && (
+        <div className="connected-body">
+          <p>
+            Let Claude or another AI assistant read your trees and add todos. In Claude: <i>Settings → Connectors → Add custom connector</i>, with this address:
+          </p>
+          <div className="connect-url">
+            <code>{url}</code>
+            <button
+              className="tb"
+              onClick={() => {
+                void navigator.clipboard?.writeText(url).then(() => setCopied(true));
+              }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          {failed && <p className="account-error">Couldn’t load your connected apps.</p>}
+          {list && !list.length && <p className="fine">No apps connected yet.</p>}
+          {list?.map((c) => (
+            <div key={c.clientId} className="connection">
+              <span>
+                <b>{c.name}</b>
+                <small>Connected {ago(c.since)}{c.lastUsed ? ` · used ${ago(c.lastUsed)}` : ''}</small>
+              </span>
+              <button
+                className="tb"
+                onClick={async () => {
+                  await api(`/api/me/connections?client=${encodeURIComponent(c.clientId)}`, { method: 'DELETE' }).catch(() => setFailed(true));
+                  void load();
+                }}
+              >
+                Disconnect
+              </button>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

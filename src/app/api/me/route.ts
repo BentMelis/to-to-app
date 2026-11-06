@@ -1,5 +1,6 @@
 import { authed, json } from '@/lib/server/http';
 import { deleteUserData, touchUser } from '@/lib/server/store';
+import { forgetUser } from '@/lib/server/oauth';
 
 /** The profile; creates it on first sign-in. */
 export const GET = authed(async ({ caller, db }) => json(await touchUser(db, caller)));
@@ -10,5 +11,6 @@ export const GET = authed(async ({ caller, db }) => json(await touchUser(db, cal
  */
 export const DELETE = authed(async ({ caller, db }) => {
   const r = await deleteUserData(db, caller.uid);
+  await forgetUser(db, caller.uid); // connected apps (MCP) lose access too
   return json({ ok: true, deletedTrees: r.trees });
 });

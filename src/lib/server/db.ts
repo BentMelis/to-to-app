@@ -4,6 +4,7 @@
  */
 import { MongoClient, type Db } from 'mongodb';
 import { serverConfig } from './config';
+import { ensureOAuthIndexes } from './oauth';
 
 type Cache = { client?: MongoClient; db?: Promise<Db> };
 const g = globalThis as typeof globalThis & { __twiglistMongo?: Cache };
@@ -37,4 +38,5 @@ export async function ensureIndexes(db: Db) {
     { key: { ownerId: 1, treeId: 1 }, name: 'owner_tree', unique: true },
     { key: { ownerId: 1, deletedAt: 1, order: 1 }, name: 'owner_live_order' },
   ]);
+  await ensureOAuthIndexes(db);
 }

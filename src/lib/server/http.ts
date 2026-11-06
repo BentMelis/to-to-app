@@ -18,7 +18,7 @@ const fail = (status: number, error: string, extra?: object) => json({ error, ..
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS = 240;
 const hits = new Map<string, { start: number; n: number }>();
-function limited(uid: string) {
+export function limited(uid: string) {
   const now = Date.now();
   const h = hits.get(uid);
   if (!h || now - h.start > WINDOW_MS) {
@@ -59,3 +59,22 @@ export function authed(fn: Handler) {
     }
   };
 }
+
+/** The site's own origin as the client sees it (https://www.twiglist.app, a preview URL, or localhost). */
+export function originOf(req: Request) {
+  const u = new URL(req.url);
+  const host = req.headers.get('x-forwarded-host') ?? u.host;
+  const proto = req.headers.get('x-forwarded-proto') ?? u.protocol.replace(':', '');
+  return `${proto}://${host}`;
+}
+
+/** OAuth/MCP discovery and token endpoints are called by other apps, some from a browser. */
+export const CORS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+  'access-control-allow-headers': 'authorization, content-type, mcp-protocol-version, mcp-session-id, last-event-id',
+  'access-control-expose-headers': 'www-authenticate, mcp-session-id',
+};
+export const corsJson = (data: unknown, status = 200, extra: Record<string, string> = {}) =>
+  new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store', ...CORS, ...extra } });
+export const preflight = () => new Response(null, { status: 204, headers: CORS });

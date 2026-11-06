@@ -138,6 +138,7 @@ src/
     tree/dates.ts       Deadline maths: days left, orange/red thresholds, labels
     tree/layout.ts      Visible tree (incl. done-stacking) and the tidy-tree layout
     tree/useTreeStore.ts  Document + undo/redo + debounced persistence
+    mcp/                MCP server for AI assistants: tools (server.ts) and their tree logic (ops.ts)
     cloud/              Signed in: Firebase Auth (client), API calls, CloudLibrary (sync, offline, conflicts), migration
     server/             API side: config, MongoDB client, token check, data access (store.ts)
     storage/index.ts    Library (list + one document per tree), StorageAdapter, per-tree preferences, import/export
@@ -198,6 +199,29 @@ Microsoft Entra ID with the redirect URI Firebase shows). *Authentication → Se
 at a MongoDB (e.g. `docker run -p 27017:27017 mongo:8`, then `MONGODB_TEST_URI=mongodb://127.0.0.1:27017 npm test`).
 Locally you can sign in without Google/Microsoft through the Firebase Auth emulator
 (`npx firebase-tools emulators:start --only auth`, see the emulator lines in `.env.example`).
+
+## MCP server: TwigList in Claude and other AI assistants
+
+Signed-in users can connect an AI assistant (Claude in claude.ai, Cowork or Claude Code, or any MCP client) to their
+trees: **`https://www.twiglist.app/api/mcp`** (Streamable HTTP). In Claude: *Settings → Connectors → Add custom
+connector*. The account menu shows the address under *Connected apps (AI)*, lists connected apps and can disconnect them.
+
+**Tools** (`src/lib/mcp/server.ts`, logic in `src/lib/mcp/ops.ts`): `list_trees`, `get_tree` (outline with ids),
+`search`, `upcoming` (due soon / high priority), `add_project`, `add_todo`, `add_note`, `complete_todo`, `update_item`
+(title, notes, deadline, priority), `move_item`. Items can be named by id or exact title.
+
+- **No deleting** through MCP, and **sensitive items are never shown**, found or changed (the outline only says
+  something hidden is there).
+- Changes reuse the app's tree operations and are saved with the version check like another device; on a conflict the
+  tree is re-read and the change applied again. Open apps pick it up on focus or within 30 s.
+- Stateless: one MCP server per request (fits Vercel).
+
+**Sign-in: OAuth 2.1** (`src/lib/server/oauth.ts`). TwigList is its own small authorization server: discovery at
+`/.well-known/oauth-protected-resource[/api/mcp]` and `/.well-known/oauth-authorization-server`; dynamic client
+registration `/api/oauth/register`; the user approves on **`/oauth/authorize`** (signed in with Google/Microsoft as
+in the app); `/api/oauth/token` (authorization code with **PKCE S256 only**, refresh tokens rotate) and
+`/api/oauth/revoke`. Access tokens last 1 hour, refresh tokens 30 days. Only SHA-256 hashes of codes and tokens are
+stored (`oauth_clients`, `oauth_codes`, `oauth_tokens`). Deleting the account removes all connections.
 
 ## Data & storage
 
